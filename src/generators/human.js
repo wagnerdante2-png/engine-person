@@ -1,10 +1,12 @@
 import * as THREE from 'three';
-import { createTorsoMesh, createPelvisMesh, createTaperedLimb, createFoot } from '../geometry/anatomy.js';
+import { createTorsoMesh, createPelvisMesh, createHeadMesh, createTaperedLimb, createFoot } from '../geometry/anatomy.js';
 import { createFlameOpenHead, createFlameEyeAssembly } from '../geometry/flame-open-head.js';
 import { createDetailedHandGeometry } from '../geometry/hands.js';
 import { createJointContinuityMeshes, createJointVolumeController } from '../geometry/body-continuity.js';
 import { createAnatomicalNeck, createShoulderCaps, createKneeCap } from '../geometry/human-realism.js';
-import { refineBodySurface } from '../geometry/human-surface-refinement.js';
+import { createSurfaceFaceDetails } from '../geometry/face-details.js';
+import { sculptCraniofacialSurface } from '../geometry/craniofacial-sculpt.js';
+import { refineHeadSurface, refineBodySurface } from '../geometry/human-surface-refinement.js';
 import { EnginePersonHumanModel } from '../model/human-model.js';
 import { applyRegionalAnatomy } from '../model/regional-anatomy.js';
 import { buildStaticLandmarkEmbedding, readLandmarks, dynamicContourLandmarks } from '../model/landmark-system.js';
@@ -60,6 +62,29 @@ function prepareSkinMesh(mesh,h,a,region='body'){
   return mesh;
 }
 
+function createSafeHead(h,a,p,M,humanModel){
+  try{
+    const head=createFlameOpenHead(h,a,M.skin);head.name='ParametricHead';
+    const count=head.geometry?.attributes?.position?.count??0;
+    if(count<100)throw new Error(`FLAME mesh inválida: ${count} vértices`);
+    humanModel.applyExpression(head);
+    applyProceduralSkinColors(head,h,(h.seed??1)+911);
+    head.userData.enginePersonHead={source:'FLAME2023_Open',fallback:false};
+    return {head,flame:true};
+  }catch(error){
+    console.error('[Engine Person] FLAME head failed; using safe procedural fallback.',error);
+    const head=createHeadMesh(p,M.skin,128,92);head.name='ParametricHead';
+    humanModel.applyIdentity(head,'head');
+    applyRegionalAnatomy(head,h,a,{region:'head'});
+    sculptCraniofacialSurface(head,h,a);
+    refineHeadSurface(head,a,h);
+    humanModel.applyExpression(head);
+    applyProceduralSkinColors(head,h,(h.seed??1)+911);
+    head.userData.enginePersonHead={source:'procedural-fallback',fallback:true,error:String(error?.message??error)};
+    return {head,flame:false};
+  }
+}
+
 export function generateHuman(input){
   const h=resolveHumanProfile(input),root=new THREE.Group();root.name='ProceduralHuman';
   const humanModel=new EnginePersonHumanModel(h),a=humanModel.anthropometry;
@@ -74,11 +99,11 @@ export function generateHuman(input){
   const pelvis=createPelvisMesh(p,M.skin,76);pelvis.name='PelvisSurface';humanModel.applyIdentity(pelvis,'body');prepareSkinMesh(pelvis,h,a,'body');skinSources.push(pelvis);
   const torso=createTorsoMesh(p,M.skin,88);torso.name='TorsoAnatomy';humanModel.applyIdentity(torso,'body');prepareSkinMesh(torso,h,a,'body');skinSources.push(torso);
 
-  // FLAME2023_Open is now the actual head base mesh. We deliberately avoid the old
-  // sphere/ring craniofacial sculpt path so the FLAME topology remains the authority.
-  const head=createFlameOpenHead(h,a,M.skin);head.name='ParametricHead';
-  humanModel.applyExpression(head);applyProceduralSkinColors(head,h,(h.seed??1)+911);
-  const landmarkEmbedding=buildStaticLandmarkEmbedding(head,a,h);skinSources.push(head);
+  // Keep FLAME outside auto-skinning during the first integration pass. The head is
+  // attached rigidly to the canonical head bone, which prevents a malformed FLAME
+  // payload or head-specific skin weights from taking down the whole character.
+  const headPack=createSafeHead(h,a,p,M,humanModel),head=headPack.head;
+  const landmarkEmbedding=buildStaticLandmarkEmbedding(head,a,h);
 
   const legs=createLegParts(h,p,M),arms=createArmParts(h,p,M);
   [...legs.meshes,...arms].forEach(m=>{humanModel.applyIdentity(m,'body');prepareSkinMesh(m,h,a,'body');});
@@ -88,11 +113,14 @@ export function generateHuman(input){
   const shoulders=createShoulderCaps(p,M.skin);shoulders.children.forEach(m=>{prepareSkinMesh(m,h,a,'body');skinSources.push(m);});
   const kneeL=createKneeCap(p,'L',M.skin),kneeR=createKneeCap(p,'R',M.skin);prepareSkinMesh(kneeL,h,a,'body');prepareSkinMesh(kneeR,h,a,'body');skinSources.push(kneeL,kneeR);
   const skinned=skinSources.map(m=>autoSkinMesh(m,rig,p));skinned.forEach(m=>root.add(m));
-  const skinnedHead=skinned.find(m=>m.name==='ParametricHead');
 
+  attachPreservingWorld(root,rig.userData.bones.head,head);
   const neck=createAnatomicalNeck(p,M.skin);applyProceduralSkinColors(neck,h,(h.seed??1)+77);attachPreservingWorld(root,rig.userData.bones.neck,neck);
   const garmentPack=createConformingGarment(h,p),oldShell=garmentPack.shell;garmentPack.group.remove(oldShell);const garmentSkinned=autoSkinMesh(oldShell,rig,p);garmentPack.group.add(garmentSkinned);root.add(garmentPack.group);
-  const face=createFlameEyeAssembly(h,a,M);attachPreservingWorld(root,rig.userData.bones.head,face);
+
+  let face;
+  try{face=headPack.flame?createFlameEyeAssembly(h,a,M):createSurfaceFaceDetails(h,p,M);}catch(error){console.error('[Engine Person] FLAME eye assembly failed; using fallback facial details.',error);face=createSurfaceFaceDetails(h,p,M);}
+  attachPreservingWorld(root,rig.userData.bones.head,face);
   const hair=createProceduralHair(h,p);attachPreservingWorld(root,rig.userData.bones.head,hair);
 
   for(const side of ['L','R'])for(const item of createDetailedHandGeometry(p,side,M.skin,h))if(rig.userData.bones[item.bone]){applyProceduralSkinColors(item.mesh,h,(h.seed??1)+(side==='L'?301:401));attachLocal(rig.userData.bones[item.bone],item.mesh,item.localOffset);}
@@ -103,9 +131,9 @@ export function generateHuman(input){
   const correctives=createCorrectiveController([...skinned,garmentSkinned],rig,p,h),jointVolumes=createJointVolumeController(continuity,rig,h.continuityStrength??.80),garmentDynamics=createGarmentDynamicsController(garmentPack.group,h);
   root.userData.update=time=>{poseController(time);articulation(time);facialController(time);correctives(time);jointVolumes(time);garmentDynamics(time);updateHairSecondaryMotion(hair,time,h);if(h.animation==='idle')root.rotation.y=Math.sin(time*.28)*.006*(h.animationStrength??.55);};
   root.userData.profile=h;root.userData.anthropometry=a;root.userData.humanModel=humanModel.metadata();
-  root.userData.landmarks={embedding:landmarkEmbedding,static:()=>readLandmarks(skinnedHead,landmarkEmbedding),dynamicContour:()=>dynamicContourLandmarks(skinnedHead,a,h,THREE.MathUtils.degToRad(h.neckYaw??0))};
+  root.userData.landmarks={embedding:landmarkEmbedding,static:()=>readLandmarks(head,landmarkEmbedding),dynamicContour:()=>dynamicContourLandmarks(head,a,h,THREE.MathUtils.degToRad(h.neckYaw??0))};
   root.userData.rig={type:'humanoid-v9',bones:Object.keys(rig.userData.bones),retarget:rig.userData.retarget,autoSkin:'nearest-bone-semantic-v1',ik:!!h.ikEnabled,correctives:true,articulatedFace:true};
-  root.userData.systems={humanModel:'EPHM-1.4',headBase:'FLAME2023_Open-CC-BY-4.0',shapeSpace:'engine-person-shape-v1-body',expressionSpace:'ephm-expression-v1-on-flame',landmarks:'static+dynamic-contour-v1',faceArticulation:'neck-jaw-eyes-v1',regionalAnatomy:'regional-fields-v2-body',skinSurface:'procedural-microvariation-v1',hair:hair.userData.hair,garment:garmentPack.group.userData.garment,continuity:continuity.userData.continuity,hands:'five-finger-3-phalanx'};
-  root.userData.stats={height:H,age:Math.round(h.age??0),autonomy:h.autonomy??0,mode:'parametric-human-v14',parts:root.children.length,topology:'flame-head+ephm-body-skinned',fidelity:'FLAME-base-integration-pass-1'};
+  root.userData.systems={humanModel:'EPHM-1.4',headBase:headPack.flame?'FLAME2023_Open-CC-BY-4.0':'procedural-fallback',shapeSpace:'engine-person-shape-v1-body',expressionSpace:'ephm-expression-v1',landmarks:'static+dynamic-contour-v1',faceArticulation:'neck-jaw-eyes-v1',regionalAnatomy:'regional-fields-v2-body',skinSurface:'procedural-microvariation-v1',hair:hair.userData.hair,garment:garmentPack.group.userData.garment,continuity:continuity.userData.continuity,hands:'five-finger-3-phalanx'};
+  root.userData.stats={height:H,age:Math.round(h.age??0),autonomy:h.autonomy??0,mode:'parametric-human-v14.1',parts:root.children.length,topology:headPack.flame?'flame-head+ephm-body':'fallback-head+ephm-body',fidelity:'FLAME-base-integration-safe-pass'};
   return root;
 }
