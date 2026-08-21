@@ -10,46 +10,63 @@ const humanPanels = {
         SELECT('human.sex','Tipo corporal',[['female','Feminino'],['male','Masculino']]),
         RANGE('human.height','Altura',1.45,2.05,.01,' m'),
         RANGE('human.bodyMass','Volume corporal',.72,1.35,.01),
+        RANGE('human.muscle','Definição muscular',.75,1.35,.01),
         RANGE('human.headScale','Escala da cabeça',.88,1.12,.01)
       ]},
-      { title:'Proporções', controls:[
+      { title:'Silhueta', controls:[
         RANGE('human.shoulderWidth','Ombros',.78,1.25,.01),
+        RANGE('human.chestWidth','Tórax',.78,1.25,.01),
+        RANGE('human.chestDepth','Profundidade do tórax',.80,1.24,.01),
+        RANGE('human.waistWidth','Cintura',.76,1.30,.01),
         RANGE('human.hipWidth','Quadril',.78,1.28,.01),
+        RANGE('human.glute','Volume posterior',.78,1.28,.01)
+      ]},
+      { title:'Proporções', controls:[
         RANGE('human.torsoLength','Tronco',.84,1.18,.01),
         RANGE('human.legLength','Pernas',.86,1.16,.01),
-        RANGE('human.armLength','Braços',.88,1.14,.01)
+        RANGE('human.armLength','Braços',.88,1.14,.01),
+        RANGE('human.neckThickness','Pescoço',.78,1.25,.01)
       ]}
     ]
   },
   face: {
     title:'Rosto',
     sections:[
-      { title:'Estrutura facial', controls:[
+      { title:'Crânio e mandíbula', controls:[
         RANGE('human.faceWidth','Largura facial',.84,1.16,.01),
+        RANGE('human.headDepth','Profundidade craniana',.86,1.16,.01),
+        RANGE('human.cheekbones','Maçãs do rosto',.82,1.18,.01),
         RANGE('human.jawWidth','Mandíbula',.78,1.20,.01),
-        RANGE('human.noseScale','Nariz',.78,1.24,.01),
-        RANGE('human.eyeScale','Olhos',.82,1.22,.01)
+        RANGE('human.chinSize','Queixo',.78,1.24,.01)
       ]},
-      { title:'Olhos e pele', controls:[COLOR('human.skin','Pele'),COLOR('human.eyes','Íris')]}
+      { title:'Feições', controls:[
+        RANGE('human.noseScale','Comprimento do nariz',.78,1.24,.01),
+        RANGE('human.noseWidth','Largura do nariz',.76,1.24,.01),
+        RANGE('human.eyeScale','Tamanho dos olhos',.82,1.22,.01),
+        RANGE('human.eyeSpacing','Espaçamento dos olhos',.84,1.18,.01),
+        RANGE('human.mouthWidth','Largura da boca',.78,1.24,.01)
+      ]},
+      { title:'Olhos e pele', controls:[COLOR('human.skin','Pele'),COLOR('human.eyes','Íris'),COLOR('human.lipColor','Lábios')]}
     ]
   },
   hair: {
     title:'Cabelo',
     sections:[
-      { title:'Estilo', cards:{ path:'human.hairStyle', options:[['long-side','Longo lateral','Volume longo e assimétrico'],['bob','Bob','Corte médio arredondado'],['short','Curto','Volume compacto']] }},
+      { title:'Estilo', cards:{ path:'human.hairStyle', options:[['long-side','Longo','Guias procedurais longas'],['bob','Bob','Volume médio com fios curtos'],['short','Curto','Cap compacto']] }},
+      { title:'Geometria', controls:[RANGE('human.hairLength','Comprimento',.65,1.40,.01)]},
       { title:'Material', controls:[COLOR('human.hair','Cor do cabelo')]}
     ]
   },
   clothing: {
     title:'Roupa',
     sections:[
-      { title:'Conjunto', cards:{ path:'human.outfit', options:[['casual','Casual','Camiseta e calça'],['jacket','Jaqueta','Camada externa estruturada'],['formal','Formal','Casaco e visual sóbrio']] }},
+      { title:'Conjunto', cards:{ path:'human.outfit', options:[['casual','Casual','Malha ajustada e calça'],['jacket','Jaqueta','Casca externa mais estruturada'],['formal','Formal','Silhueta de casaco sóbria']] }},
       { title:'Cores', controls:[COLOR('human.topColor','Parte superior'),COLOR('human.bottomColor','Parte inferior')]}
     ]
   },
   materials: {
     title:'Materiais',
-    sections:[{ title:'Superfícies atuais', controls:[COLOR('human.skin','Pele'),COLOR('human.hair','Cabelo'),COLOR('human.topColor','Roupa superior'),COLOR('human.bottomColor','Roupa inferior')] }]
+    sections:[{ title:'Superfícies', controls:[COLOR('human.skin','Pele'),COLOR('human.hair','Cabelo'),COLOR('human.topColor','Roupa superior'),COLOR('human.bottomColor','Roupa inferior'),COLOR('human.lipColor','Lábios')] }]
   },
   environment: {
     title:'Ambiente',
@@ -79,7 +96,7 @@ const cityPanel = {
 const projectPanel = {
   title:'Projeto',
   sections:[
-    { title:'Engine Person', html:'<p style="font-size:11px;color:#9ba8b8;line-height:1.55;margin:0">O projeto é determinístico e local-first. Os parâmetros de pessoa, cidade e ambiente são salvos em JSON. A arquitetura já reserva módulos independentes para malhas-base, morphs, catálogo, rig, materiais, geração urbana e exportação.</p>' }
+    { title:'Engine Person', html:'<p style="font-size:11px;color:#9ba8b8;line-height:1.55;margin:0">Arquitetura local-first, determinística e sem dependência de IA. O humano agora usa superfícies paramétricas próprias para tronco, pelve, cabeça e membros, preparando morphs, rig, roupas conformadas e LOD sem trocar o contrato do produto.</p>' }
   ]
 };
 
