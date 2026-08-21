@@ -1,17 +1,27 @@
 import * as THREE from 'three';
+import {
+  createTorsoMesh,
+  createPelvisMesh,
+  createHeadMesh,
+  createTaperedLimb,
+  createFoot,
+  createHand
+} from '../geometry/anatomy.js';
 
-const mat = (color, roughness = 0.72, metalness = 0.0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
+const skinMaterial = (color) => new THREE.MeshPhysicalMaterial({
+  color,
+  roughness: .46,
+  metalness: 0,
+  clearcoat: .08,
+  clearcoatRoughness: .7,
+  sheen: .08,
+  sheenRoughness: .8
+});
 
-function capsule(radius, length, material, radial = 20) {
-  const g = new THREE.CapsuleGeometry(radius, Math.max(0.001, length), 8, radial);
-  const m = new THREE.Mesh(g, material);
-  m.castShadow = true;
-  m.receiveShadow = true;
-  return m;
-}
+const mat = (color, roughness = .72, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
 
 function sphere(rx, ry, rz, material, seg = 32) {
-  const g = new THREE.SphereGeometry(1, seg, Math.max(16, seg / 2));
+  const g = new THREE.SphereGeometry(1, seg, Math.max(16, Math.round(seg / 2)));
   g.scale(rx, ry, rz);
   const m = new THREE.Mesh(g, material);
   m.castShadow = true;
@@ -26,20 +36,165 @@ function place(group, mesh, x, y, z, rx = 0, ry = 0, rz = 0) {
   return mesh;
 }
 
-function createHair(h, headY, headR, hairMaterial) {
-  const hair = new THREE.Group();
-  if (h.hairStyle === 'short') {
-    place(hair, sphere(headR * 1.04, headR * 0.72, headR * 1.03, hairMaterial, 28), 0, headY + headR * .28, -headR * .05);
-  } else if (h.hairStyle === 'bob') {
-    place(hair, sphere(headR * 1.08, headR * 1.18, headR * 1.08, hairMaterial, 28), 0, headY - headR * .08, -headR * .06);
-  } else {
-    place(hair, sphere(headR * 1.07, headR * .78, headR * 1.05, hairMaterial, 28), 0, headY + headR * .26, -headR * .05);
-    const side = capsule(headR * .30, headR * 1.45, hairMaterial, 16);
-    place(hair, side, -headR * .78, headY - headR * .54, -headR * .02, 0.08, 0, -0.08);
-    const back = capsule(headR * .42, headR * 1.55, hairMaterial, 16);
-    place(hair, back, headR * .16, headY - headR * .58, -headR * .62, -0.02, 0, 0.06);
+function createNeck(H, y, radius, material) {
+  const geometry = new THREE.CylinderGeometry(radius * .92, radius, H * .070, 36, 6, false);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(0, y, 0);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function createFaceFeatures(root, h, p, materials) {
+  const { H, headR, headY } = p;
+  const eyeY = headY + headR * .10;
+  const eyeX = headR * .34 * h.eyeSpacing;
+  const eyeZ = headR * .86 * h.headDepth;
+
+  for (const sx of [-1, 1]) {
+    place(root, sphere(headR * .155 * h.eyeScale, headR * .088 * h.eyeScale, headR * .064, materials.eyeWhite, 28), sx * eyeX, eyeY, eyeZ);
+    place(root, sphere(headR * .066 * h.eyeScale, headR * .066 * h.eyeScale, headR * .030, materials.iris, 24), sx * eyeX, eyeY, eyeZ + headR * .052);
+    place(root, sphere(headR * .025, headR * .025, headR * .010, materials.pupil, 18), sx * eyeX, eyeY, eyeZ + headR * .081);
   }
+
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(headR * .105 * h.noseWidth, headR * .31 * h.noseScale, 24), materials.skin);
+  nose.rotation.x = Math.PI / 2;
+  place(root, nose, 0, headY - headR * .08, headR * .91 * h.headDepth, Math.PI / 2);
+
+  const lipMat = mat(h.lipColor, .48, 0);
+  place(root, sphere(headR * .19 * h.mouthWidth, headR * .035, headR * .032, lipMat, 30), 0, headY - headR * .35, headR * .88 * h.headDepth);
+  place(root, sphere(headR * .18 * h.mouthWidth, headR * .030, headR * .029, lipMat, 30), 0, headY - headR * .40, headR * .87 * h.headDepth);
+}
+
+function createHair(h, p, material) {
+  const { headR, headY } = p;
+  const hair = new THREE.Group();
+  hair.name = 'HairSystem';
+
+  const cap = sphere(headR * 1.035, headR * .82, headR * 1.02, material, 44);
+  place(hair, cap, 0, headY + headR * .27, -headR * .045);
+
+  if (h.hairStyle === 'short') return hair;
+
+  const strands = h.hairStyle === 'bob' ? 18 : 24;
+  const length = headR * (h.hairStyle === 'bob' ? 1.15 : 2.25) * h.hairLength;
+  const spread = h.hairStyle === 'bob' ? .84 : .92;
+
+  for (let i = 0; i < strands; i++) {
+    const u = strands === 1 ? 0 : i / (strands - 1);
+    const side = u * 2 - 1;
+    const rootX = side * headR * spread;
+    const rootY = headY + headR * (.30 - .25 * Math.abs(side));
+    const rootZ = -headR * (.05 + .16 * Math.abs(side));
+    const tipX = rootX + side * headR * .18;
+    const tipY = rootY - length * (.72 + .18 * Math.abs(side));
+    const tipZ = rootZ - headR * (.10 + .22 * (1 - Math.abs(side)));
+    const r = headR * (h.hairStyle === 'bob' ? .055 : .045);
+    const strand = createTaperedLimb({
+      start:[rootX, rootY, rootZ],
+      end:[tipX, tipY, tipZ],
+      radii:[r, r * .82, r * .25],
+      material,
+      radialSegments:10,
+      segments:8,
+      ellipticity:.62
+    });
+    hair.add(strand);
+  }
+
   return hair;
+}
+
+function createGarmentShell(h, p, bodyMaterial) {
+  const shellProfile = {
+    ...p,
+    bodyMass: p.bodyMass * (h.outfit === 'jacket' ? 1.10 : h.outfit === 'formal' ? 1.07 : 1.035),
+    chestWidth: p.chestWidth * (h.outfit === 'jacket' ? 1.05 : 1.01),
+    waistWidth: p.waistWidth * (h.outfit === 'formal' ? 1.02 : 1),
+    shoulderWidth: p.shoulderWidth * (h.outfit === 'jacket' ? 1.04 : 1.01)
+  };
+  const shell = createTorsoMesh(shellProfile, bodyMaterial, 48);
+  shell.name = 'UpperGarment';
+  return shell;
+}
+
+function createLegs(root, h, p, materials) {
+  const H = p.H;
+  const upperLeg = p.legLen * .50;
+  const lowerLeg = p.legLen * .43;
+  const thighTopY = p.hipY - H * .020;
+  const kneeY = thighTopY - upperLeg;
+  const ankleY = Math.max(H * .060, kneeY - lowerLeg);
+  const legX = p.hipHalf * .55;
+  const thighR = H * .037 * p.bodyMass * (1 + (p.glute - 1) * .28);
+  const calfR = H * .029 * p.bodyMass * (1 + (p.muscle - 1) * .34);
+
+  for (const sx of [-1, 1]) {
+    root.add(createTaperedLimb({
+      start:[sx * legX, thighTopY, 0],
+      end:[sx * legX * .98, kneeY, H * .005],
+      radii:[thighR * 1.06, thighR * .92, H * .030 * p.bodyMass],
+      material:materials.bottom,
+      radialSegments:34,
+      segments:16,
+      ellipticity:.90
+    }));
+
+    root.add(createTaperedLimb({
+      start:[sx * legX * .98, kneeY, H * .005],
+      end:[sx * legX * .96, ankleY, 0],
+      radii:[H * .030 * p.bodyMass, calfR * 1.06, H * .020 * p.bodyMass],
+      material:materials.skin,
+      radialSegments:30,
+      segments:14,
+      ellipticity:.92
+    }));
+
+    const foot = createFoot(H, H * .043 * p.bodyMass, H * .082, materials.shoe);
+    foot.position.set(sx * legX * .96, 0, H * .035);
+    root.add(foot);
+  }
+}
+
+function createArms(root, h, p, materials) {
+  const H = p.H;
+  const armLen = H * .325 * h.armLength;
+  const upperLen = armLen * .49;
+  const lowerLen = armLen * .43;
+  const shoulderX = p.shoulderHalf * .96;
+  const shoulderY = p.shoulderY - H * .014;
+  const upperR = H * .0255 * p.bodyMass * (1 + (p.muscle - 1) * .36);
+  const foreR = H * .0215 * p.bodyMass * (1 + (p.muscle - 1) * .28);
+
+  for (const sx of [-1, 1]) {
+    const elbow = [sx * (shoulderX + H * .012), shoulderY - upperLen, H * .002];
+    const wrist = [sx * (shoulderX + H * .020), shoulderY - upperLen - lowerLen, H * .006];
+
+    root.add(createTaperedLimb({
+      start:[sx * shoulderX, shoulderY, 0],
+      end:elbow,
+      radii:[upperR * 1.08, upperR, upperR * .82],
+      material:materials.top,
+      radialSegments:28,
+      segments:12,
+      ellipticity:.96
+    }));
+
+    root.add(createTaperedLimb({
+      start:elbow,
+      end:wrist,
+      radii:[foreR * 1.06, foreR, foreR * .70],
+      material:materials.skin,
+      radialSegments:26,
+      segments:12,
+      ellipticity:.94
+    }));
+
+    const hand = createHand(H, H * .026 * p.bodyMass, materials.skin);
+    hand.position.set(wrist[0], wrist[1] - H * .038, wrist[2]);
+    hand.rotation.z = sx * -.04;
+    root.add(hand);
+  }
 }
 
 export function generateHuman(h) {
@@ -48,98 +203,86 @@ export function generateHuman(h) {
 
   const H = h.height;
   const female = h.sex === 'female';
-  const skin = mat(h.skin, .58, 0.0);
-  const hairMat = mat(h.hair, .76, 0.0);
-  const eyeWhite = mat('#f4f4ef', .35);
-  const iris = mat(h.eyes, .32);
-  const topMat = mat(h.topColor, .82);
-  const bottomMat = mat(h.bottomColor, .86);
-  const shoeMat = mat('#121318', .58, .08);
-
-  const headR = H * 0.083 * h.headScale;
-  const legLen = H * 0.455 * h.legLength;
-  const torsoLen = H * 0.285 * h.torsoLength;
+  const bodyMass = h.bodyMass;
+  const legLen = H * .455 * h.legLength;
+  const torsoLen = H * .285 * h.torsoLength;
   const hipY = legLen;
-  const chestY = hipY + torsoLen * .60;
   const shoulderY = hipY + torsoLen;
-  const neckY = shoulderY + H * .035;
-  const headY = neckY + headR * 1.10;
-  const shoulderHalf = H * 0.115 * h.shoulderWidth * (female ? .94 : 1.06);
-  const hipHalf = H * 0.085 * h.hipWidth * (female ? 1.06 : .96);
-  const mass = h.bodyMass;
-  const limbR = H * .030 * mass;
+  const headR = H * .083 * h.headScale;
+  const neckY = shoulderY + H * .047;
+  const headY = neckY + headR * 1.08;
+  const shoulderHalf = H * .112 * h.shoulderWidth * (female ? .95 : 1.07);
+  const hipHalf = H * .087 * h.hipWidth * (female ? 1.08 : .96);
 
-  // Torso and pelvis volumes.
-  place(root, sphere(shoulderHalf * .92, torsoLen * .48, H * .075 * mass, topMat, 36), 0, chestY, 0);
-  place(root, sphere(hipHalf, H * .095, H * .072 * mass, bottomMat, 32), 0, hipY + H * .055, 0);
+  const p = {
+    H,
+    female,
+    bodyMass,
+    legLen,
+    torsoLen,
+    hipY,
+    shoulderY,
+    headR,
+    headY,
+    shoulderHalf,
+    hipHalf,
+    shoulderWidth:h.shoulderWidth,
+    hipWidth:h.hipWidth,
+    waistWidth:h.waistWidth,
+    chestWidth:h.chestWidth,
+    chestDepth:h.chestDepth,
+    glute:h.glute,
+    muscle:h.muscle,
+    sexWidth:female ? .95 : 1.05,
+    sexHip:female ? 1.07 : .96,
+    faceWidth:h.faceWidth,
+    jawWidth:h.jawWidth,
+    cheekbones:h.cheekbones,
+    headDepth:h.headDepth,
+    chinSize:h.chinSize
+  };
 
-  // Neck.
-  place(root, capsule(H * .027 * mass, H * .035, skin, 20), 0, neckY, 0);
+  const materials = {
+    skin:skinMaterial(h.skin),
+    eyeWhite:mat('#f4f5f1', .24),
+    iris:mat(h.eyes, .24),
+    pupil:mat('#090b0d', .20),
+    hair:mat(h.hair, .62),
+    top:mat(h.topColor, .80),
+    bottom:mat(h.bottomColor, .84),
+    shoe:mat('#111318', .52, .06)
+  };
 
-  // Head shell.
-  const head = sphere(headR * h.faceWidth, headR * 1.12, headR * .93, skin, 40);
-  place(root, head, 0, headY, 0);
+  const pelvis = createPelvisMesh(p, materials.bottom, 52);
+  pelvis.name = 'PelvisSurface';
+  root.add(pelvis);
 
-  // Jaw/chin overlay to make silhouette responsive to jaw parameter.
-  place(root, sphere(headR * .62 * h.jawWidth, headR * .43, headR * .75, skin, 32), 0, headY - headR * .63, headR * .05);
+  const torsoSkin = createTorsoMesh(p, materials.skin, 56);
+  torsoSkin.name = 'TorsoAnatomy';
+  root.add(torsoSkin);
 
-  // Nose.
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(headR * .13 * h.noseScale, headR * .33 * h.noseScale, 16), skin);
-  nose.rotation.x = Math.PI / 2;
-  place(root, nose, 0, headY - headR * .07, headR * .91, Math.PI / 2);
+  const upperGarment = createGarmentShell(h, p, materials.top);
+  root.add(upperGarment);
 
-  // Eyes.
-  const eyeY = headY + headR * .12;
-  const eyeX = headR * .38;
-  for (const sx of [-1, 1]) {
-    place(root, sphere(headR * .17 * h.eyeScale, headR * .10 * h.eyeScale, headR * .07, eyeWhite, 20), sx * eyeX, eyeY, headR * .86);
-    place(root, sphere(headR * .075 * h.eyeScale, headR * .075 * h.eyeScale, headR * .035, iris, 18), sx * eyeX, eyeY, headR * .925);
-  }
+  const neck = createNeck(H, neckY, H * .027 * h.neckThickness * bodyMass, materials.skin);
+  neck.name = 'Neck';
+  root.add(neck);
 
-  // Hair system placeholder with modular styles.
-  root.add(createHair(h, headY, headR, hairMat));
+  const head = createHeadMesh(p, materials.skin, 64, 46);
+  head.name = 'ParametricHead';
+  root.add(head);
 
-  // Legs.
-  const upperLeg = legLen * .49;
-  const lowerLeg = legLen * .43;
-  const kneeY = hipY - upperLeg * .52;
-  const ankleY = H * .065;
-  const legX = hipHalf * .56;
-  for (const sx of [-1, 1]) {
-    const thigh = capsule(limbR * 1.25, upperLeg * .72, bottomMat, 24);
-    place(root, thigh, sx * legX, hipY - upperLeg * .45, 0, 0, 0, 0);
-    const calf = capsule(limbR * 1.03, lowerLeg * .76, skin, 22);
-    place(root, calf, sx * legX, kneeY - lowerLeg * .55, 0);
-    const foot = sphere(H * .047, H * .028, H * .085, shoeMat, 24);
-    place(root, foot, sx * legX, ankleY * .48, H * .047);
-  }
-
-  // Arms.
-  const armLen = H * .325 * h.armLength;
-  const upperArm = armLen * .49;
-  const foreArm = armLen * .43;
-  for (const sx of [-1, 1]) {
-    const armX = sx * (shoulderHalf + limbR * 1.12);
-    const upper = capsule(limbR * .82, upperArm * .72, topMat, 20);
-    place(root, upper, armX, shoulderY - upperArm * .47, 0, 0, 0, sx * -0.035);
-    const fore = capsule(limbR * .72, foreArm * .76, skin, 20);
-    place(root, fore, armX + sx * H * .006, shoulderY - upperArm - foreArm * .42, 0, 0, 0, sx * -0.02);
-    place(root, sphere(limbR * .77, limbR * 1.15, limbR * .56, skin, 20), armX + sx * H * .009, shoulderY - upperArm - foreArm * .92, 0);
-  }
-
-  // Outfit variations stay topology-independent.
-  if (h.outfit === 'jacket') {
-    const jacket = sphere(shoulderHalf * .99, torsoLen * .50, H * .081 * mass, mat('#2b313d', .66), 32);
-    place(root, jacket, 0, chestY, -H * .006);
-  } else if (h.outfit === 'formal') {
-    const coat = sphere(shoulderHalf * .98, torsoLen * .53, H * .078 * mass, mat('#111827', .62), 32);
-    place(root, coat, 0, chestY - H * .01, 0);
-  }
+  createFaceFeatures(root, h, p, materials);
+  root.add(createHair(h, p, materials.hair));
+  createLegs(root, h, p, materials);
+  createArms(root, h, p, materials);
 
   root.userData.stats = {
-    height: H,
-    mode: 'procedural-human',
-    parts: root.children.length
+    height:H,
+    mode:'parametric-human-v2',
+    parts:root.children.length,
+    topology:'procedural-ring-surfaces',
+    fidelity:'anatomy-foundation'
   };
   return root;
 }
