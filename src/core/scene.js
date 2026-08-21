@@ -5,6 +5,7 @@ export class SceneRuntime {
   constructor(canvas, store) {
     this.canvas = canvas;
     this.store = store;
+    this.clock = new THREE.Clock();
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#0b0f16');
     this.scene.fog = new THREE.FogExp2('#0b0f16', 0.025);
@@ -90,6 +91,7 @@ export class SceneRuntime {
   setObject(object, { mode = 'human' } = {}) {
     this.clearContent();
     this.content.add(object);
+    this.clock.start();
     this.frame(mode);
   }
 
@@ -119,6 +121,8 @@ export class SceneRuntime {
   }
 
   animate() {
+    const elapsed = this.clock.getElapsedTime();
+    for (const object of this.content.children) object.userData?.update?.(elapsed);
     this.controls.autoRotate = !!this.store.get('environment.autoRotate');
     this.controls.autoRotateSpeed = 0.6;
     this.controls.update();
