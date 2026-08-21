@@ -77,17 +77,19 @@ const humanPanels = {
 const cityPanel = {
   title:'Cidade Procedural',
   sections:[
-    { title:'Malha urbana', controls:[
+    { title:'Plano urbano', controls:[
       RANGE('city.blocksX','Blocos X',3,12,1),
       RANGE('city.blocksZ','Blocos Z',3,12,1),
       RANGE('city.streetWidth','Largura das ruas',.10,.35,.01),
-      RANGE('city.density','Densidade',.18,1,.01),
+      RANGE('city.parcelSubdivision','Subdivisão de lotes',0,1,.01),
+      RANGE('city.commercialMix','Mistura comercial',0,1,.01),
       RANGE('city.greenRatio','Áreas verdes',0,.42,.01)
     ]},
-    { title:'Edificações', controls:[
+    { title:'Ocupação e skyline', controls:[
+      RANGE('city.density','Densidade',.18,1,.01),
       RANGE('city.minFloors','Mín. pavimentos',1,8,1),
       RANGE('city.maxFloors','Máx. pavimentos',3,28,1),
-      RANGE('city.variation','Variação',0,1,.01),
+      RANGE('city.variation','Variação volumétrica',0,1,.01),
       RANGE('city.facadeHue','Família de cor',0,1,.01)
     ]}
   ]
@@ -96,7 +98,7 @@ const cityPanel = {
 const projectPanel = {
   title:'Projeto',
   sections:[
-    { title:'Engine Person', html:'<p style="font-size:11px;color:#9ba8b8;line-height:1.55;margin:0">Arquitetura local-first, determinística e sem dependência de IA. O humano agora usa superfícies paramétricas próprias para tronco, pelve, cabeça e membros, preparando morphs, rig, roupas conformadas e LOD sem trocar o contrato do produto.</p>' }
+    { title:'Engine Person', html:'<p style="font-size:11px;color:#9ba8b8;line-height:1.55;margin:0">Arquitetura local-first, determinística e sem dependência de IA. Humanos usam superfícies paramétricas próprias; cidades passam por uma camada de planejamento com vias, quadras, lotes, zoneamento, parques e volumetria. A evolução visual pode ocorrer sem alterar o formato de projeto.</p>' }
   ]
 };
 
