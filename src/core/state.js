@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 6,
+  version: 7,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
@@ -19,7 +19,10 @@ export const defaultState = {
     subsurface: .42, eyeWetness: .78, tearline: .72, oralDetail: .80,
     lipColor: '#9b5b57', skin: '#c98f72', hair: '#4a2b20', eyes: '#5c493d',
     hairStyle: 'long-side', hairLength: 1.00, hairDensity: 1.00,
+    hairQuality: .78, hairRoughness: .42, hairWave: .24, hairMotion: .32,
     outfit: 'casual', topColor: '#191b22', bottomColor: '#20334a',
+    garmentFit: .52, fabricType: 'cotton', garmentMotion: .18,
+    continuityStrength: .72,
     pose: 'relaxed', animation: 'idle', animationSpeed: 1.0, animationStrength: .55,
     rigVisible: false,
     ikEnabled: true, ikWeight: .72, ikReach: .45,
