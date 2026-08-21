@@ -8,7 +8,7 @@ const humanPanels={
     {title:'Geração autônoma',controls:[RANGE('human.autonomy','Autonomia procedural',0,1,.01),RANGE('human.age','Idade',18,85,1,' anos'),SELECT('human.sex','Tipo corporal',[['female','Feminino'],['male','Masculino']])]},
     {title:'Base',controls:[RANGE('human.height','Altura',1.45,2.05,.01,' m'),RANGE('human.bodyMass','Volume corporal',.72,1.35,.01),RANGE('human.muscle','Definição muscular',.75,1.35,.01),RANGE('human.headScale','Escala da cabeça',.88,1.12,.01)]},
     {title:'Silhueta',controls:[RANGE('human.shoulderWidth','Ombros',.78,1.25,.01),RANGE('human.chestWidth','Tórax',.78,1.25,.01),RANGE('human.chestDepth','Profundidade do tórax',.80,1.24,.01),RANGE('human.waistWidth','Cintura',.76,1.30,.01),RANGE('human.hipWidth','Quadril',.78,1.28,.01),RANGE('human.glute','Volume posterior',.78,1.28,.01)]},
-    {title:'Proporções',controls:[RANGE('human.torsoLength','Tronco',.84,1.18,.01),RANGE('human.legLength','Pernas',.86,1.16,.01),RANGE('human.armLength','Braços',.88,1.14,.01),RANGE('human.neckThickness','Pescoço',.78,1.25,.01)]}
+    {title:'Proporções',controls:[RANGE('human.torsoLength','Tronco',.84,1.18,.01),RANGE('human.legLength','Pernas',.86,1.16,.01),RANGE('human.armLength','Braços',.88,1.14,.01),RANGE('human.neckThickness','Pescoço',.78,1.25,.01),RANGE('human.handScale','Escala das mãos',.78,1.24,.01),RANGE('human.fingerLength','Comprimento dos dedos',.78,1.25,.01)]}
   ]},
   face:{title:'Rosto',sections:[
     {title:'Crânio e mandíbula',controls:[RANGE('human.faceWidth','Largura facial',.84,1.16,.01),RANGE('human.headDepth','Profundidade craniana',.86,1.16,.01),RANGE('human.foreheadHeight','Testa',.82,1.18,.01),RANGE('human.cheekbones','Maçãs do rosto',.82,1.18,.01),RANGE('human.jawWidth','Mandíbula',.78,1.20,.01),RANGE('human.chinSize','Queixo',.78,1.24,.01),RANGE('human.earScale','Orelhas',.80,1.25,.01)]},
@@ -27,8 +27,10 @@ const humanPanels={
   ]},
   animation:{title:'Rig & Movimento',sections:[
     {title:'Pose e esqueleto',controls:[SELECT('human.pose','Pose base',[['relaxed','Relaxada'],['hero','Heroica'],['contrapposto','Contrapposto'],['apose','A-Pose'],['tpose','T-Pose']]),CHECK('human.rigVisible','Exibir esqueleto')]},
+    {title:'Mãos articuladas',controls:[SELECT('human.handPose','Pose das mãos',[['open','Aberta'],['relaxed','Relaxada'],['fist','Punho'],['grip','Pegada'],['point','Apontar']]),RANGE('human.handCurlStrength','Força da pose',0,1.2,.01),RANGE('human.handScale','Escala das mãos',.78,1.24,.01),RANGE('human.fingerLength','Comprimento dos dedos',.78,1.25,.01)]},
     {title:'Animação procedural',controls:[SELECT('human.animation','Movimento',[['idle','Idle vivo'],['breathing','Respiração'],['walk','Caminhada'],['run','Corrida'],['off','Desligado']]),RANGE('human.animationSpeed','Velocidade',.25,2.5,.05),RANGE('human.animationStrength','Intensidade',0,1,.01)]},
     {title:'IK automático',controls:[CHECK('human.ikEnabled','Ativar IK mãos/pés'),RANGE('human.ikWeight','Peso do IK',0,1,.01),RANGE('human.ikReach','Alcance procedural',0,1,.01)]},
+    {title:'Deformação corretiva',controls:[RANGE('human.correctiveStrength','Preservação de volume',0,1,.01)]},
     {title:'Compatibilidade',controls:[SELECT('human.retargetProfile','Perfil de retarget',[['engine-person-humanoid','Engine Person Humanoid']])]}
   ]},
   environment:{title:'Ambiente',sections:[{title:'Iluminação',controls:[RANGE('environment.timeOfDay','Hora',0,24,.1,' h'),RANGE('environment.exposure','Exposição',.45,1.8,.01),COLOR('environment.ground','Solo')]}]}
@@ -39,7 +41,7 @@ const cityPanel={title:'Mundo Procedural',sections:[
   {title:'Plano urbano',controls:[RANGE('city.blocksX','Blocos X',3,12,1),RANGE('city.blocksZ','Blocos Z',3,12,1),RANGE('city.streetWidth','Largura das ruas',.08,.35,.01),RANGE('city.parcelSubdivision','Subdivisão de lotes',0,1,.01),RANGE('city.commercialMix','Mistura comercial',0,1,.01),RANGE('city.greenRatio','Áreas verdes',0,.42,.01)]},
   {title:'Ocupação e skyline',controls:[RANGE('city.density','Densidade',.18,1,.01),RANGE('city.minFloors','Mín. pavimentos',1,8,1),RANGE('city.maxFloors','Máx. pavimentos',2,28,1),RANGE('city.variation','Variação volumétrica',0,1,.01),RANGE('city.facadeHue','Família de cor',0,1,.01)]}
 ]};
-const projectPanel={title:'Projeto',sections:[{title:'Engine Person',html:'<p style="font-size:11px;color:#9ba8b8;line-height:1.55;margin:0">Arquitetura local-first e determinística. Personagens possuem geração autônoma, materiais especializados, auto-skinning, rig humano, IK, expressões procedurais e perfil de retarget. Mundos aceitam linguagem moderna, medieval ou híbrida.</p>'}]};
+const projectPanel={title:'Projeto',sections:[{title:'Engine Person',html:'<p style="font-size:11px;color:#9ba8b8;line-height:1.55;margin:0">Arquitetura local-first e determinística. Personagens possuem geração autônoma, materiais especializados, auto-skinning, rig humano completo com dedos, IK, deformações corretivas, expressões procedurais e retarget. Mundos aceitam linguagem moderna, medieval ou híbrida.</p>'}]};
 function formatValue(c,v){if(c.step>=1)return`${Math.round(v)}${c.suffix??''}`;const digits=c.step<.01?3:c.step<.1?2:1;return`${Number(v).toFixed(digits)}${c.suffix??''}`;}
 export class InspectorUI{
   constructor(store,onChange){this.store=store;this.onChange=onChange;this.title=document.querySelector('#panelTitle');this.content=document.querySelector('#panelContent');}
