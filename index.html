@@ -7,24 +7,13 @@
   <title>Engine Person</title>
   <link rel="stylesheet" href="./styles.css" />
   <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
-      }
-    }
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
 </head>
 <body>
   <div id="app">
     <header class="topbar glass">
-      <div class="brand">
-        <div class="brand-mark">EP</div>
-        <div>
-          <strong>Engine Person</strong>
-          <span>Procedural Human & World Studio</span>
-        </div>
-      </div>
+      <div class="brand"><div class="brand-mark">EP</div><div><strong>Engine Person</strong><span>Procedural Human & World Studio</span></div></div>
       <nav class="workspace-tabs" aria-label="Modos de trabalho">
         <button class="workspace-tab active" data-mode="human">Pessoa</button>
         <button class="workspace-tab" data-mode="city">Cidade</button>
@@ -44,6 +33,7 @@
       <button class="tool-button" data-tool="hair"><span>≋</span><small>Cabelo</small></button>
       <button class="tool-button" data-tool="clothing"><span>⌁</span><small>Roupa</small></button>
       <button class="tool-button" data-tool="materials"><span>◐</span><small>Materiais</small></button>
+      <button class="tool-button" data-tool="animation"><span>⌘</span><small>Rig</small></button>
       <div class="leftbar-spacer"></div>
       <button class="tool-button" data-tool="environment"><span>◇</span><small>Ambiente</small></button>
     </aside>
@@ -51,34 +41,17 @@
     <main id="viewportWrap">
       <canvas id="viewport"></canvas>
       <div class="viewport-gradient"></div>
-      <div class="viewport-info glass">
-        <div><span class="status-dot"></span><span id="modeLabel">PERSON DESIGN</span></div>
-        <div class="seed-readout">SEED <strong id="seedLabel">000000</strong></div>
-      </div>
+      <div class="viewport-info glass"><div><span class="status-dot"></span><span id="modeLabel">PERSON DESIGN</span></div><div class="seed-readout">SEED <strong id="seedLabel">000000</strong></div></div>
       <div class="camera-hints glass">Arraste: orbitar · Scroll: zoom · Botão direito: mover</div>
     </main>
 
     <aside id="inspector" class="inspector glass">
-      <div class="inspector-head">
-        <div>
-          <span class="eyebrow">EDITOR</span>
-          <h2 id="panelTitle">Corpo</h2>
-        </div>
-        <button id="collapseInspector" class="icon-btn">〉</button>
-      </div>
+      <div class="inspector-head"><div><span class="eyebrow">EDITOR</span><h2 id="panelTitle">Corpo</h2></div><button id="collapseInspector" class="icon-btn">〉</button></div>
       <div id="panelContent" class="panel-content"></div>
     </aside>
 
-    <footer class="statusbar glass">
-      <div id="objectStats">Pronto</div>
-      <div class="status-actions">
-        <button id="resetCameraBtn">Enquadrar</button>
-        <button id="toggleGridBtn">Grade</button>
-        <button id="toggleAutoRotateBtn">Auto-rotação</button>
-      </div>
-    </footer>
+    <footer class="statusbar glass"><div id="objectStats">Pronto</div><div class="status-actions"><button id="resetCameraBtn">Enquadrar</button><button id="toggleGridBtn">Grade</button><button id="toggleAutoRotateBtn">Auto-rotação</button></div></footer>
   </div>
-
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>
