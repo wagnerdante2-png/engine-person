@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 4,
+  version: 5,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
@@ -21,7 +21,10 @@ export const defaultState = {
     hairStyle: 'long-side', hairLength: 1.00, hairDensity: 1.00,
     outfit: 'casual', topColor: '#191b22', bottomColor: '#20334a',
     pose: 'relaxed', animation: 'idle', animationSpeed: 1.0, animationStrength: .55,
-    rigVisible: false
+    rigVisible: false,
+    ikEnabled: true, ikWeight: .72, ikReach: .45,
+    retargetProfile: 'engine-person-humanoid',
+    expression: 'neutral', blinkSpeed: 1.0, smile: 0, jawOpen: 0, browRaise: 0, squint: 0
   },
   city: {
     seed: 952731,
