@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 7,
+  version: 8,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
@@ -15,20 +15,20 @@ export const defaultState = {
     noseScale: 1.00, noseWidth: 1.00, noseBridge: 1.00,
     eyeScale: 1.00, eyeSpacing: 1.00, eyelidOpen: 1.00,
     mouthWidth: 1.00, lipFullness: 1.00, earScale: 1.00, asymmetry: 0.035,
-    skinRoughness: .46, skinDetail: .72,
-    subsurface: .42, eyeWetness: .78, tearline: .72, oralDetail: .80,
-    lipColor: '#9b5b57', skin: '#c98f72', hair: '#4a2b20', eyes: '#5c493d',
+    skinRoughness: .43, skinDetail: .72,
+    subsurface: .48, eyeWetness: .80, tearline: .74, oralDetail: .80,
+    lipColor: '#a66362', skin: '#d49a7d', hair: '#4a2b20', eyes: '#5c493d',
     hairStyle: 'long-side', hairLength: 1.00, hairDensity: 1.00,
     hairQuality: .78, hairRoughness: .42, hairWave: .24, hairMotion: .32,
-    outfit: 'casual', topColor: '#191b22', bottomColor: '#20334a',
+    outfit: 'casual', topColor: '#252832', bottomColor: '#23384f',
     garmentFit: .52, fabricType: 'cotton', garmentMotion: .18,
-    continuityStrength: .72,
-    pose: 'relaxed', animation: 'idle', animationSpeed: 1.0, animationStrength: .55,
+    continuityStrength: .82,
+    pose: 'relaxed', animation: 'idle', animationSpeed: 1.0, animationStrength: .45,
     rigVisible: false,
     ikEnabled: true, ikWeight: .72, ikReach: .45,
     retargetProfile: 'engine-person-humanoid',
-    correctiveStrength: .82,
-    handScale: 1.0, fingerLength: 1.0, handPose: 'relaxed', handCurlStrength: .88,
+    correctiveStrength: .88,
+    handScale: 0.95, fingerLength: 0.96, handPose: 'relaxed', handCurlStrength: .82,
     expression: 'neutral', blinkSpeed: 1.0, smile: 0, jawOpen: 0, browRaise: 0, squint: 0
   },
   city: {
@@ -39,7 +39,7 @@ export const defaultState = {
     minFloors: 2, maxFloors: 14, variation: 0.72, greenRatio: 0.15, facadeHue: 0.58,
     organicLayout: .12, fortification: .55, towerChance: .28, marketRatio: .18, timberRatio: .46
   },
-  environment: { timeOfDay: 18.2, exposure: 1.0, ground: '#11151d', autoRotate: false, grid: true }
+  environment: { timeOfDay: 15.6, exposure: 1.18, ground: '#151a22', autoRotate: false, grid: true }
 };
 
 export function cloneState(source = defaultState) { return JSON.parse(JSON.stringify(source)); }
