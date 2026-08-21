@@ -16,14 +16,15 @@ function renderCurrent() {
   if (mode === 'human') {
     const obj = generateHuman(store.state.human);
     runtime.setObject(obj, { mode:'human' });
-    stats.textContent = `Pessoa procedural · ${obj.userData.stats.parts} componentes · ${store.get('human.height').toFixed(2)} m`;
+    const s = obj.userData.stats;
+    stats.textContent = `Pessoa paramétrica · ${s.parts} componentes · ${store.get('human.height').toFixed(2)} m · ${s.topology}`;
     modeLabel.textContent = 'PERSON DESIGN';
     seedLabel.textContent = String(store.get('seed')).padStart(6,'0');
   } else if (mode === 'city') {
     const obj = generateCity(store.state.city);
     runtime.setObject(obj, { mode:'city' });
     const s = obj.userData.stats;
-    stats.textContent = `Cidade procedural · ${s.buildings} edifícios · ${s.parks} áreas verdes · ${s.blocks} blocos`;
+    stats.textContent = `Cidade procedural · ${s.buildings} edifícios · ${s.parcels} lotes · ${s.roads} vias · ${s.parks} parques`;
     modeLabel.textContent = 'CITY DESIGN';
     seedLabel.textContent = String(store.get('city.seed')).padStart(6,'0');
   } else {
