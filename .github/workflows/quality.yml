@@ -40,6 +40,8 @@ jobs:
           test -f src/model/human-model.js
           test -f src/model/shape-space.js
           test -f src/model/pose-space.js
+          test -f src/model/regional-anatomy.js
+          test -f src/materials/skin-surface.js
           test -f src/rig/skeleton.js
           test -f src/rig/skinning.js
           test -f src/rig/correctives.js
