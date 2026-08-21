@@ -1,48 +1,73 @@
 import * as THREE from 'three';
 import { createTorsoMesh, createPelvisMesh, createHeadMesh, createTaperedLimb, createFoot, createHand } from '../geometry/anatomy.js';
 import { resolveHumanProfile } from './human-profile.js';
+import { createHumanoidRig, createPoseController, createRigHelper } from '../rig/skeleton.js';
 
 const mat=(color,roughness=.72,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
-const skinMaterial=(h)=>new THREE.MeshPhysicalMaterial({ color:h.skin, roughness:h.skinRoughness??.46, metalness:0, clearcoat:.06, clearcoatRoughness:.72, sheen:.10, sheenRoughness:.82 });
+const skinMaterial=(h)=>new THREE.MeshPhysicalMaterial({
+  color:h.skin, roughness:h.skinRoughness??.46, metalness:0,
+  clearcoat:.05, clearcoatRoughness:.72, sheen:.10, sheenRoughness:.82,
+  transmission:0, thickness:.08 + (h.subsurface??.4)*.08
+});
+const corneaMaterial=(h)=>new THREE.MeshPhysicalMaterial({
+  color:'#f5fbff', transparent:true, opacity:.14 + (h.eyeWetness??.7)*.12,
+  roughness:.04, metalness:0, transmission:.16, thickness:.015, clearcoat:1, clearcoatRoughness:.02
+});
 function sphere(rx,ry,rz,material,seg=32){ const g=new THREE.SphereGeometry(1,seg,Math.max(16,Math.round(seg/2))); g.scale(rx,ry,rz); const m=new THREE.Mesh(g,material); m.castShadow=true; m.receiveShadow=true; return m; }
 function place(group,mesh,x,y,z,rx=0,ry=0,rz=0){ mesh.position.set(x,y,z); mesh.rotation.set(rx,ry,rz); group.add(mesh); return mesh; }
 function createNeck(H,y,radius,material){ const g=new THREE.CylinderGeometry(radius*.92,radius,H*.070,36,6,false); const m=new THREE.Mesh(g,material); m.position.set(0,y,0); m.castShadow=true; m.receiveShadow=true; return m; }
 
+function createTearline(headR, material){
+  const curve=new THREE.CatmullRomCurve3([
+    new THREE.Vector3(-headR*.13,0,0), new THREE.Vector3(0,-headR*.012,headR*.005), new THREE.Vector3(headR*.13,0,0)
+  ]);
+  return new THREE.Mesh(new THREE.TubeGeometry(curve,20,headR*.006,8,false),material);
+}
+
 function createFaceFeatures(root,h,p,materials){
   const {headR,headY}=p;
-  const asym=h.asymmetry??0;
-  const eyeY=headY+headR*.10;
-  const eyeX=headR*.34*h.eyeSpacing;
-  const eyeZ=headR*.86*h.headDepth;
+  const asym=h.asymmetry??0, eyeY=headY+headR*.10, eyeX=headR*.34*h.eyeSpacing, eyeZ=headR*.86*h.headDepth;
   const browMat=mat(h.hair,.72);
+  const tearMat=new THREE.MeshPhysicalMaterial({color:'#d8edf0',transparent:true,opacity:.18+(h.tearline??.7)*.20,roughness:.04,clearcoat:1});
   for(const sx of [-1,1]){
     const offset=sx*asym*headR*.10;
-    place(root,sphere(headR*.155*h.eyeScale,headR*.088*h.eyeScale*h.eyelidOpen,headR*.064,materials.eyeWhite,30),sx*eyeX+offset,eyeY+offset*.12,eyeZ);
-    place(root,sphere(headR*.066*h.eyeScale,headR*.066*h.eyeScale,headR*.030,materials.iris,24),sx*eyeX+offset,eyeY+offset*.12,eyeZ+headR*.052);
-    place(root,sphere(headR*.025,headR*.025,headR*.010,materials.pupil,18),sx*eyeX+offset,eyeY+offset*.12,eyeZ+headR*.081);
+    const ex=sx*eyeX+offset, ey=eyeY+offset*.12;
+    place(root,sphere(headR*.155*h.eyeScale,headR*.088*h.eyeScale*h.eyelidOpen,headR*.064,materials.eyeWhite,30),ex,ey,eyeZ);
+    place(root,sphere(headR*.066*h.eyeScale,headR*.066*h.eyeScale,headR*.030,materials.iris,24),ex,ey,eyeZ+headR*.052);
+    place(root,sphere(headR*.025,headR*.025,headR*.010,materials.pupil,18),ex,ey,eyeZ+headR*.081);
+    place(root,sphere(headR*.158*h.eyeScale,headR*.091*h.eyeScale*h.eyelidOpen,headR*.018,materials.cornea,30),ex,ey,eyeZ+headR*.080);
+    const occ=new THREE.Mesh(new THREE.TorusGeometry(headR*.118*h.eyeScale,headR*.012,8,40,Math.PI),materials.eyeOcclusion);
+    place(root,occ,ex,ey-headR*.010,eyeZ+headR*.069,0,0,sx<0?Math.PI:0);
+    const tear=createTearline(headR,tearMat); place(root,tear,ex,ey-headR*.072*h.eyeScale,eyeZ+headR*.078,0,0,0);
     const brow=new THREE.Mesh(new THREE.BoxGeometry(headR*.30*h.browThickness,headR*.026*h.browThickness,headR*.018),browMat);
     place(root,brow,sx*eyeX,eyeY+headR*.22*h.browHeight,eyeZ+headR*.045,0,0,sx*-.10);
     place(root,sphere(headR*.105*h.earScale,headR*.19*h.earScale,headR*.055,materials.skin,24),sx*headR*.93*h.faceWidth,headY-headR*.02,-headR*.02);
   }
-  const noseMat=materials.skin;
-  const bridge=new THREE.Mesh(new THREE.CapsuleGeometry(headR*.055*h.noseWidth,headR*.19*h.noseScale,6,18),noseMat);
+
+  const bridge=new THREE.Mesh(new THREE.CapsuleGeometry(headR*.055*h.noseWidth,headR*.19*h.noseScale,6,18),materials.skin);
   place(root,bridge,0,headY+headR*.01,headR*.84*h.headDepth,Math.PI/2,0,0);
-  const nose=new THREE.Mesh(new THREE.ConeGeometry(headR*.105*h.noseWidth,headR*.31*h.noseScale,24),noseMat);
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(headR*.105*h.noseWidth,headR*.31*h.noseScale,24),materials.skin);
   place(root,nose,0,headY-headR*.08,headR*.91*h.headDepth,Math.PI/2);
   for(const sx of [-1,1]) place(root,sphere(headR*.032*h.noseWidth,headR*.025,headR*.016,materials.shadow,18),sx*headR*.055*h.noseWidth,headY-headR*.19,headR*.985*h.headDepth);
-  const lipMat=mat(h.lipColor,.46,0);
+
+  const lipMat=mat(h.lipColor,.42,0);
   place(root,sphere(headR*.19*h.mouthWidth,headR*.037*h.lipFullness,headR*.032,lipMat,30),0,headY-headR*.35,headR*.88*h.headDepth);
   place(root,sphere(headR*.18*h.mouthWidth,headR*.032*h.lipFullness,headR*.029,lipMat,30),0,headY-headR*.40,headR*.87*h.headDepth);
-  const mouthGap=new THREE.Mesh(new THREE.BoxGeometry(headR*.30*h.mouthWidth,headR*.009,headR*.008),materials.shadow);
-  place(root,mouthGap,0,headY-headR*.375,headR*.918*h.headDepth);
+  place(root,new THREE.Mesh(new THREE.BoxGeometry(headR*.30*h.mouthWidth,headR*.010,headR*.010),materials.shadow),0,headY-headR*.375,headR*.918*h.headDepth);
+
+  if((h.oralDetail??.8)>.35){
+    const teeth=new THREE.Mesh(new THREE.BoxGeometry(headR*.25*h.mouthWidth,headR*.038,headR*.018),materials.teeth);
+    place(root,teeth,0,headY-headR*.375,headR*.927*h.headDepth);
+    const tongue=sphere(headR*.12*h.mouthWidth,headR*.018,headR*.028,materials.tongue,20);
+    place(root,tongue,0,headY-headR*.397,headR*.920*h.headDepth);
+  }
 
   const detail=h.skinDetail??0;
   if(detail>.45){
     const freckleMat=mat(new THREE.Color(h.skin).multiplyScalar(.72),.62);
     const count=Math.round(6+detail*12);
     for(let i=0;i<count;i++){
-      const side=i%2===0?-1:1;
-      const u=(i%6)/5;
+      const side=i%2===0?-1:1, u=(i%6)/5;
       place(root,sphere(headR*.008,headR*.006,headR*.003,freckleMat,10),side*headR*(.17+.26*u),headY+headR*(.02-.12*u),headR*.94*h.headDepth);
     }
   }
@@ -52,10 +77,8 @@ function createHair(h,p,material){
   const {headR,headY}=p; const hair=new THREE.Group(); hair.name='HairSystem';
   const cap=sphere(headR*1.035,headR*.82,headR*1.02,material,48); place(hair,cap,0,headY+headR*.27,-headR*.045);
   if(h.hairStyle==='short') return hair;
-  const baseStrands=h.hairStyle==='bob'?24:34;
-  const strands=Math.max(16,Math.round(baseStrands*(h.hairDensity??1)));
-  const length=headR*(h.hairStyle==='bob'?1.15:2.25)*h.hairLength;
-  const spread=h.hairStyle==='bob'?.84:.92;
+  const baseStrands=h.hairStyle==='bob'?24:34, strands=Math.max(16,Math.round(baseStrands*(h.hairDensity??1)));
+  const length=headR*(h.hairStyle==='bob'?1.15:2.25)*h.hairLength, spread=h.hairStyle==='bob'?.84:.92;
   for(let i=0;i<strands;i++){
     const u=strands===1?0:i/(strands-1), side=u*2-1;
     const rootX=side*headR*spread, rootY=headY+headR*(.30-.25*Math.abs(side)), rootZ=-headR*(.05+.16*Math.abs(side));
@@ -91,14 +114,31 @@ export function generateHuman(input){
   const h=resolveHumanProfile(input); const root=new THREE.Group(); root.name='ProceduralHuman';
   const H=h.height, female=h.sex==='female', bodyMass=h.bodyMass, legLen=H*.455*h.legLength, torsoLen=H*.285*h.torsoLength, hipY=legLen, shoulderY=hipY+torsoLen, headR=H*.083*h.headScale, neckY=shoulderY+H*.047, headY=neckY+headR*1.08, shoulderHalf=H*.112*h.shoulderWidth*(female?.95:1.07), hipHalf=H*.087*h.hipWidth*(female?1.08:.96);
   const p={H,female,bodyMass,legLen,torsoLen,hipY,shoulderY,headR,headY,shoulderHalf,hipHalf,shoulderWidth:h.shoulderWidth,hipWidth:h.hipWidth,waistWidth:h.waistWidth,chestWidth:h.chestWidth,chestDepth:h.chestDepth,glute:h.glute,muscle:h.muscle,sexWidth:female?.95:1.05,sexHip:female?1.07:.96,faceWidth:h.faceWidth,jawWidth:h.jawWidth,cheekbones:h.cheekbones,headDepth:h.headDepth,chinSize:h.chinSize,foreheadHeight:h.foreheadHeight};
-  const materials={skin:skinMaterial(h),eyeWhite:mat('#f4f5f1',.24),iris:mat(h.eyes,.24),pupil:mat('#090b0d',.20),shadow:mat('#2b1715',.60),hair:mat(h.hair,.60),top:mat(h.topColor,.80),bottom:mat(h.bottomColor,.84),shoe:mat('#111318',.52,.06)};
+  const materials={
+    skin:skinMaterial(h), eyeWhite:mat('#f4f5f1',.20), iris:mat(h.eyes,.18), pupil:mat('#090b0d',.18),
+    cornea:corneaMaterial(h), eyeOcclusion:mat('#3b2522',.52), shadow:mat('#2b1715',.60),
+    teeth:mat('#f1eee5',.30), tongue:mat('#a05257',.48), hair:mat(h.hair,.60),
+    top:mat(h.topColor,.80), bottom:mat(h.bottomColor,.84), shoe:mat('#111318',.52,.06)
+  };
   const pelvis=createPelvisMesh(p,materials.bottom,52); pelvis.name='PelvisSurface'; root.add(pelvis);
   const torsoSkin=createTorsoMesh(p,materials.skin,56); torsoSkin.name='TorsoAnatomy'; root.add(torsoSkin);
-  root.add(createGarmentShell(h,p,materials.top));
+  const garment=createGarmentShell(h,p,materials.top); root.add(garment);
   const neck=createNeck(H,neckY,H*.027*h.neckThickness*bodyMass,materials.skin); neck.name='Neck'; root.add(neck);
   const head=createHeadMesh(p,materials.skin,68,50); head.name='ParametricHead'; root.add(head);
   createFaceFeatures(root,h,p,materials); root.add(createHair(h,p,materials.hair)); createLegs(root,h,p,materials); createArms(root,h,p,materials);
+
+  const rig=createHumanoidRig(p); root.add(rig);
+  const rigHelper=createRigHelper(rig,!!h.rigVisible); root.add(rigHelper);
+  const poseController=createPoseController(rig,h);
+  root.userData.update=(time)=>{
+    poseController(time);
+    const breath=1+Math.sin(time*(h.animationSpeed??1)*1.5)*.004*(h.animationStrength??.55);
+    torsoSkin.scale.z=breath; garment.scale.z=1+(breath-1)*.7;
+    if(h.animation==='idle') root.rotation.y=Math.sin(time*.28)*.008*(h.animationStrength??.55);
+  };
   root.userData.profile=h;
-  root.userData.stats={height:H,age:Math.round(h.age??0),autonomy:h.autonomy??0,mode:'parametric-human-v3',parts:root.children.length,topology:'procedural-ring-surfaces',fidelity:'detailed-autonomous-foundation'};
+  root.userData.rig={type:'humanoid-v1',bones:Object.keys(rig.userData.bones),pose:h.pose,animation:h.animation};
+  root.userData.materialSystems=['skin','eyes','eye-occlusion','tearline','hair','teeth','tongue','clothing'];
+  root.userData.stats={height:H,age:Math.round(h.age??0),autonomy:h.autonomy??0,mode:'parametric-human-v4',parts:root.children.length,topology:'procedural-ring-surfaces',fidelity:'rigged-material-stack'};
   return root;
 }
