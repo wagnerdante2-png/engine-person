@@ -31,6 +31,8 @@ jobs:
           test -f src/generators/hair-system.js
           test -f src/generators/garment-system.js
           test -f src/generators/urban-plan.js
+          test -f src/assets/flame-open-lod.js
+          test -f src/geometry/flame-open-head.js
           test -f src/geometry/anatomy.js
           test -f src/geometry/human-realism.js
           test -f src/geometry/human-surface-refinement.js
@@ -56,5 +58,6 @@ jobs:
           test -f src/export/gltf.js
           test -f src/core/diagnostics.js
           test -f src/core/lod.js
+          test -f docs/THIRD_PARTY.md
       - name: Reject accidental merge markers
         run: '! grep -R -n -E "^(<<<<<<<|=======|>>>>>>>)" src index.html styles.css'
