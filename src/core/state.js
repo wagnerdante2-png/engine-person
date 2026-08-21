@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 12,
+  version: 13,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
@@ -29,7 +29,9 @@ export const defaultState = {
     retargetProfile: 'engine-person-humanoid',
     correctiveStrength: .88,
     handScale: 0.95, fingerLength: 0.96, handPose: 'relaxed', handCurlStrength: .82,
-    expression: 'neutral', blinkSpeed: 1.0, smile: 0, jawOpen: 0, browRaise: 0, squint: 0
+    expression: 'neutral', blinkSpeed: 1.0, smile: 0, jawOpen: 0, browRaise: 0, squint: 0,
+    mouthPress: 0, mouthPucker: 0,
+    eyeYaw: 0, eyePitch: 0, neckYaw: 0, neckPitch: 0, headTilt: 0, jawForward: 0
   },
   city: {
     seed: 952731,
