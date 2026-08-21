@@ -25,7 +25,11 @@ export function applyProceduralSkinColors(mesh,h,seed=1){
     colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;
   }
   mesh.geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
-  if(mesh.material){mesh.material.vertexColors=true;mesh.material.needsUpdate=true;}
+  if(mesh.material){
+    mesh.material=mesh.material.clone();
+    mesh.material.vertexColors=true;
+    mesh.material.needsUpdate=true;
+  }
   mesh.userData.skinSurface={type:'procedural-vertex-microvariation-v1',detail};
   return mesh;
 }
@@ -37,8 +41,6 @@ export function enhanceSkinMaterial(material,h){
   if('sheenRoughness' in material)material.sheenRoughness=.86;
   if('clearcoat' in material)material.clearcoat=.025;
   if('clearcoatRoughness' in material)material.clearcoatRoughness=.78;
-  material.vertexColors=true;
-  material.needsUpdate=true;
   material.userData.skinModel={version:'1.0',subsurfaceApprox:h.subsurface??.48,microdetail:h.skinDetail??.72};
   return material;
 }
