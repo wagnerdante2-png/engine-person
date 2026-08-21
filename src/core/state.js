@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 5,
+  version: 6,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
@@ -24,6 +24,8 @@ export const defaultState = {
     rigVisible: false,
     ikEnabled: true, ikWeight: .72, ikReach: .45,
     retargetProfile: 'engine-person-humanoid',
+    correctiveStrength: .82,
+    handScale: 1.0, fingerLength: 1.0, handPose: 'relaxed', handCurlStrength: .88,
     expression: 'neutral', blinkSpeed: 1.0, smile: 0, jawOpen: 0, browRaise: 0, squint: 0
   },
   city: {
