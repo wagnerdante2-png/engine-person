@@ -1,0 +1,19 @@
+{
+  "source": "FLAME2023_Open",
+  "license": "CC BY 4.0",
+  "vertexCount": 5023,
+  "faceCount": 9976,
+  "shapeComponents": 400,
+  "identityComponents": 300,
+  "expressionComponents": 100,
+  "expressionRange": [300, 399],
+  "posedirsComponents": 36,
+  "jointCount": 5,
+  "weightsShape": [5023, 5],
+  "jRegressorShape": [5, 5023],
+  "kintreeShape": [2, 5],
+  "shapeChunkSize": 10,
+  "bounds": {"min": [-0.10978439, -0.18724248, -0.15323225], "max": [0.10776618, 0.13212053, 0.07508866]},
+  "expressionMetadata": {"expr_source": "SUPR_head", "supr_gender": "male", "expr_components": "last_100", "n_expr": 100},
+  "binaryEncoding": {"floats": "little-endian float32", "indices": "little-endian uint32"}
+}
