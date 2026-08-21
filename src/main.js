@@ -3,6 +3,16 @@ import { SceneRuntime } from './core/scene.js';
 import { generateHuman } from './generators/human.js';
 import { generateCity } from './generators/city.js';
 import { InspectorUI } from './ui/panels.js';
+import { loadFlame2023OpenCore } from './assets/flame2023-open/runtime.js';
+
+let flameRuntimeReady = false;
+try {
+  const flame = await loadFlame2023OpenCore();
+  flameRuntimeReady = flame.metadata.vertexCount === 5023 && flame.metadata.faceCount === 9976;
+  console.info(`[Engine Person] FLAME2023_Open ready: ${flame.metadata.vertexCount} vertices / ${flame.metadata.faceCount} faces`);
+} catch (error) {
+  console.warn('[Engine Person] Exact FLAME runtime assets are not available yet; fallback remains active.', error);
+}
 
 const store = new Store(defaultState);
 const runtime = new SceneRuntime(document.querySelector('#viewport'), store);
@@ -18,7 +28,9 @@ function renderCurrent() {
     runtime.setObject(obj, { mode:'human' });
     const s = obj.userData.stats;
     const bones = obj.userData.rig?.bones?.length ?? 0;
-    stats.textContent = `Pessoa paramétrica · ${bones} ossos · ${store.get('human.pose')} · ${store.get('human.animation')} · ${s.height.toFixed(2)} m · autonomia ${Math.round(s.autonomy*100)}%`;
+    const head = obj.userData.systems?.headBase ?? 'unknown-head';
+    const flameTag = flameRuntimeReady ? ` · FLAME ${s.headVertices ?? '?'}v/${s.headFaces ?? '?'}f` : ` · ${head}`;
+    stats.textContent = `Pessoa paramétrica · ${bones} ossos · ${store.get('human.pose')} · ${store.get('human.animation')} · ${s.height.toFixed(2)} m · autonomia ${Math.round(s.autonomy*100)}%${flameTag}`;
     modeLabel.textContent = 'PERSON DESIGN';
     seedLabel.textContent = String(store.get('seed')).padStart(6,'0');
   } else if (mode === 'city') {
