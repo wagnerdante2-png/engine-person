@@ -26,3 +26,14 @@ jobs:
           test -f src/generators/city.js
           test -f src/geometry/anatomy.js
           test -f src/generators/urban-plan.js
+          test -f src/rig/skeleton.js
+          test -f src/rig/skinning.js
+          test -f src/rig/ik.js
+          test -f src/rig/retarget.js
+          test -f src/rig/animation-clip.js
+          test -f src/generators/facial-animation.js
+          test -f src/export/gltf.js
+          test -f src/core/diagnostics.js
+          test -f src/core/lod.js
+      - name: Reject accidental merge markers
+        run: '! grep -R -n -E "^(<<<<<<<|=======|>>>>>>>)" src index.html styles.css'
