@@ -35,6 +35,8 @@ jobs:
           test -f src/geometry/human-realism.js
           test -f src/geometry/human-surface-refinement.js
           test -f src/geometry/rbf-deformer.js
+          test -f src/geometry/craniofacial-sculpt.js
+          test -f src/geometry/face-details.js
           test -f src/geometry/hands.js
           test -f src/geometry/body-continuity.js
           test -f src/model/human-model.js
