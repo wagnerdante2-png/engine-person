@@ -1,8 +1,10 @@
 import * as THREE from 'three';
-import { createTorsoMesh, createPelvisMesh, createHeadMesh, createTaperedLimb, createFoot, createHand } from '../geometry/anatomy.js';
+import { createTorsoMesh, createPelvisMesh, createHeadMesh, createTaperedLimb, createFoot } from '../geometry/anatomy.js';
+import { createDetailedHandGeometry } from '../geometry/hands.js';
 import { resolveHumanProfile } from './human-profile.js';
 import { createHumanoidRig, createPoseController, createRigHelper } from '../rig/skeleton.js';
 import { autoSkinMesh } from '../rig/skinning.js';
+import { createCorrectiveController } from '../rig/correctives.js';
 import { createFacialController } from './facial-animation.js';
 
 const mat=(color,roughness=.72,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
@@ -77,18 +79,18 @@ function createLegParts(h,p,materials){
 }
 
 function createArmParts(h,p,materials){
-  const parts=[],rigid=[]; const H=p.H,armLen=H*.325*h.armLength,upperLen=armLen*.49,lowerLen=armLen*.43,shoulderX=p.shoulderHalf*.96,shoulderY=p.shoulderY-H*.014;
+  const parts=[]; const H=p.H,armLen=H*.325*h.armLength,upperLen=armLen*.49,lowerLen=armLen*.43,shoulderX=p.shoulderHalf*.96,shoulderY=p.shoulderY-H*.014;
   const upperR=H*.0255*p.bodyMass*(1+(p.muscle-1)*.36),foreR=H*.0215*p.bodyMass*(1+(p.muscle-1)*.28);
   for(const sx of [-1,1]){
     const s=sx<0?'L':'R',elbow=[sx*(shoulderX+H*.012),shoulderY-upperLen,H*.002],wrist=[sx*(shoulderX+H*.020),shoulderY-upperLen-lowerLen,H*.006];
     const upper=createTaperedLimb({start:[sx*shoulderX,shoulderY,0],end:elbow,radii:[upperR*1.08,upperR,upperR*.82],material:materials.top,radialSegments:28,segments:12,ellipticity:.96});upper.name=`UpperArmMesh_${s}`;parts.push(upper);
     const fore=createTaperedLimb({start:elbow,end:wrist,radii:[foreR*1.06,foreR,foreR*.70],material:materials.skin,radialSegments:26,segments:12,ellipticity:.94});fore.name=`ForearmMesh_${s}`;parts.push(fore);
-    const hand=createHand(H,H*.026*p.bodyMass,materials.skin);hand.position.set(wrist[0],wrist[1]-H*.038,wrist[2]);hand.rotation.z=sx*-.04;hand.name=`HandMesh_${s}`;rigid.push({mesh:hand,bone:`hand_${s}`});
   }
-  return {parts,rigid};
+  return {parts};
 }
 
 function attachPreservingWorld(root,bone,obj){root.add(obj);root.updateMatrixWorld(true);bone.attach(obj);}
+function attachLocal(bone,obj,offset=[0,0,0]){obj.position.set(...offset);bone.add(obj);}
 
 export function generateHuman(input){
   const h=resolveHumanProfile(input); const root=new THREE.Group(); root.name='ProceduralHuman';
@@ -97,27 +99,38 @@ export function generateHuman(input){
   const materials={skin:skinMaterial(h),eyeWhite:mat('#f4f5f1',.20),iris:mat(h.eyes,.18),pupil:mat('#090b0d',.18),cornea:corneaMaterial(h),eyeOcclusion:mat('#3b2522',.52),shadow:mat('#2b1715',.60),teeth:mat('#f1eee5',.30),tongue:mat('#a05257',.48),hair:mat(h.hair,.60),top:mat(h.topColor,.80),bottom:mat(h.bottomColor,.84),shoe:mat('#111318',.52,.06)};
 
   const rig=createHumanoidRig(p); root.add(rig); root.updateMatrixWorld(true);
-  const bodyMeshes=[];
-  const pelvis=createPelvisMesh(p,materials.bottom,52);pelvis.name='PelvisSurface';bodyMeshes.push(pelvis);
-  const torso=createTorsoMesh(p,materials.skin,56);torso.name='TorsoAnatomy';bodyMeshes.push(torso);
-  const garment=createGarmentShell(h,p,materials.top);bodyMeshes.push(garment);
-  const head=createHeadMesh(p,materials.skin,68,50);head.name='ParametricHead';bodyMeshes.push(head);
-  const limbs=[...createLegParts(h,p,materials).parts,...createArmParts(h,p,materials).parts];
-  [...bodyMeshes,...limbs].forEach(mesh=>root.add(autoSkinMesh(mesh,rig,p)));
+  const sourceMeshes=[];
+  const pelvis=createPelvisMesh(p,materials.bottom,52);pelvis.name='PelvisSurface';sourceMeshes.push(pelvis);
+  const torso=createTorsoMesh(p,materials.skin,56);torso.name='TorsoAnatomy';sourceMeshes.push(torso);
+  const garment=createGarmentShell(h,p,materials.top);sourceMeshes.push(garment);
+  const head=createHeadMesh(p,materials.skin,68,50);head.name='ParametricHead';sourceMeshes.push(head);
+  const legs=createLegParts(h,p,materials), arms=createArmParts(h,p,materials);
+  sourceMeshes.push(...legs.parts,...arms.parts);
+  const skinnedMeshes=sourceMeshes.map(mesh=>autoSkinMesh(mesh,rig,p));
+  skinnedMeshes.forEach(mesh=>root.add(mesh));
 
   const neck=createNeck(H,neckY,H*.027*h.neckThickness*bodyMass,materials.skin);attachPreservingWorld(root,rig.userData.bones.neck,neck);
   const face=createFaceGroup(h,p,materials);attachPreservingWorld(root,rig.userData.bones.head,face);
   const hair=createHair(h,p,materials.hair);attachPreservingWorld(root,rig.userData.bones.head,hair);
+  legs.rigid.forEach(({mesh,bone})=>attachPreservingWorld(root,rig.userData.bones[bone],mesh));
 
-  const legs=createLegParts(h,p,materials), arms=createArmParts(h,p,materials);
-  [...legs.rigid,...arms.rigid].forEach(({mesh,bone})=>attachPreservingWorld(root,rig.userData.bones[bone],mesh));
+  for(const side of ['L','R']){
+    const handParts=createDetailedHandGeometry(p,side,materials.skin,{handScale:h.handScale??1,fingerLength:h.fingerLength??1});
+    handParts.forEach(({mesh,bone,localOffset})=>{const target=rig.userData.bones[bone];if(target)attachLocal(target,mesh,localOffset);});
+  }
 
   const rigHelper=createRigHelper(rig,!!h.rigVisible);root.add(rigHelper);
   const poseController=createPoseController(rig,h);
   const facialController=createFacialController(face,h);
-  root.userData.update=time=>{poseController(time);facialController(time);if(h.animation==='idle')root.rotation.y=Math.sin(time*.28)*.008*(h.animationStrength??.55);};
+  const correctiveController=createCorrectiveController(skinnedMeshes,rig,p,h);
+  root.userData.update=time=>{
+    poseController(time);
+    correctiveController();
+    facialController(time);
+    if(h.animation==='idle')root.rotation.y=Math.sin(time*.28)*.008*(h.animationStrength??.55);
+  };
   root.userData.profile=h;
-  root.userData.rig={type:'humanoid-v2',bones:Object.keys(rig.userData.bones),retarget:rig.userData.retarget,autoSkin:'nearest-bone-semantic-v1',ik:!!h.ikEnabled};
-  root.userData.stats={height:H,age:Math.round(h.age??0),autonomy:h.autonomy??0,mode:'parametric-human-v5',parts:root.children.length,topology:'procedural-skinned-surfaces',fidelity:'rigged-autoskinned-facial'};
+  root.userData.rig={type:'humanoid-v3',bones:Object.keys(rig.userData.bones),retarget:rig.userData.retarget,autoSkin:'nearest-bone-semantic-v1',correctives:'pose-space-v1',ik:!!h.ikEnabled,fingers:true};
+  root.userData.stats={height:H,age:Math.round(h.age??0),autonomy:h.autonomy??0,mode:'parametric-human-v6',parts:root.children.length,topology:'procedural-skinned-surfaces',fidelity:'rigged-autoskinned-corrective-hands'};
   return root;
 }
