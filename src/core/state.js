@@ -45,6 +45,8 @@ export const defaultState = {
     blocksZ: 7,
     density: 0.74,
     streetWidth: 0.18,
+    parcelSubdivision: 0.58,
+    commercialMix: 0.42,
     minFloors: 2,
     maxFloors: 14,
     variation: 0.72,
