@@ -1,9 +1,10 @@
 export const defaultState = {
-  version: 3,
+  version: 4,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
   human: {
+    seed: 483921,
     autonomy: 0.68,
     sex: 'female', age: 29, height: 1.70,
     shoulderWidth: 0.96, torsoLength: 1.00, hipWidth: 1.00, waistWidth: 1.00,
@@ -15,9 +16,12 @@ export const defaultState = {
     eyeScale: 1.00, eyeSpacing: 1.00, eyelidOpen: 1.00,
     mouthWidth: 1.00, lipFullness: 1.00, earScale: 1.00, asymmetry: 0.035,
     skinRoughness: .46, skinDetail: .72,
+    subsurface: .42, eyeWetness: .78, tearline: .72, oralDetail: .80,
     lipColor: '#9b5b57', skin: '#c98f72', hair: '#4a2b20', eyes: '#5c493d',
     hairStyle: 'long-side', hairLength: 1.00, hairDensity: 1.00,
-    outfit: 'casual', topColor: '#191b22', bottomColor: '#20334a'
+    outfit: 'casual', topColor: '#191b22', bottomColor: '#20334a',
+    pose: 'relaxed', animation: 'idle', animationSpeed: 1.0, animationStrength: .55,
+    rigVisible: false
   },
   city: {
     seed: 952731,
@@ -47,7 +51,12 @@ export class Store extends EventTarget {
     if (!silent) this.dispatchEvent(new CustomEvent('change', { detail: { path, value, state: this.state } }));
   }
   replace(next) { this.state = cloneState(mergeDeep(defaultState, next)); this.state.version = defaultState.version; this.dispatchEvent(new CustomEvent('replace', { detail: { state: this.state } })); }
-  randomizeSeed(target = 'seed') { const seed = Math.floor(Math.random() * 900000) + 100000; if (target === 'city') this.set('city.seed', seed); else this.set('seed', seed); return seed; }
+  randomizeSeed(target = 'seed') {
+    const seed = Math.floor(Math.random() * 900000) + 100000;
+    if (target === 'city') this.set('city.seed', seed);
+    else { this.set('seed', seed); this.set('human.seed', seed, true); }
+    return seed;
+  }
   serialize() { return JSON.stringify(this.state, null, 2); }
 }
 export function mulberry32(seed) {
