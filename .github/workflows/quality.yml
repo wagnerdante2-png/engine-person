@@ -37,6 +37,9 @@ jobs:
           test -f src/geometry/rbf-deformer.js
           test -f src/geometry/hands.js
           test -f src/geometry/body-continuity.js
+          test -f src/model/human-model.js
+          test -f src/model/shape-space.js
+          test -f src/model/pose-space.js
           test -f src/rig/skeleton.js
           test -f src/rig/skinning.js
           test -f src/rig/correctives.js
