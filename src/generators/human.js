@@ -3,6 +3,8 @@ import { createTorsoMesh, createPelvisMesh, createHeadMesh, createTaperedLimb, c
 import { createDetailedHandGeometry } from '../geometry/hands.js';
 import { createJointContinuityMeshes, createJointVolumeController } from '../geometry/body-continuity.js';
 import { createHumanFaceAssembly, createAnatomicalNeck, createShoulderCaps, createKneeCap } from '../geometry/human-realism.js';
+import { refineHeadSurface, refineBodySurface } from '../geometry/human-surface-refinement.js';
+import { buildAnthropometricProfile } from './anthropometry.js';
 import { resolveHumanProfile } from './human-profile.js';
 import { createHumanoidRig, createPoseController, createRigHelper } from '../rig/skeleton.js';
 import { autoSkinMesh } from '../rig/skinning.js';
@@ -34,55 +36,32 @@ function createLegParts(h,p,M){
   const ankleR=H*.0205*p.bodyMass;
   for(const sx of [-1,1]){
     const s=sx<0?'L':'R';
-    const thigh=createTaperedLimb({
-      start:[sx*x,top,-H*.004],end:[sx*x*.985,knee,H*.006],
-      radii:[thighTop,thighMid,kneeR],material:M.skin,radialSegments:38,segments:22,ellipticity:.91
-    });
+    const thigh=createTaperedLimb({start:[sx*x,top,-H*.004],end:[sx*x*.985,knee,H*.006],radii:[thighTop,thighMid,kneeR],material:M.skin,radialSegments:40,segments:24,ellipticity:.91});
     thigh.name=`Thigh_${s}`;meshes.push(thigh);
-    const calf=createTaperedLimb({
-      start:[sx*x*.985,knee,H*.006],end:[sx*x*.965,ankle,0],
-      radii:[kneeR,calfMax,ankleR],material:M.skin,radialSegments:36,segments:20,ellipticity:.90
-    });
+    const calf=createTaperedLimb({start:[sx*x*.985,knee,H*.006],end:[sx*x*.965,ankle,0],radii:[kneeR,calfMax,ankleR],material:M.skin,radialSegments:38,segments:22,ellipticity:.90});
     calf.name=`Calf_${s}`;meshes.push(calf);
-    const foot=createFoot(H,H*.037*p.bodyMass,H*.074,M.shoe);
-    foot.position.set(sx*x*.965,0,H*.044);foot.scale.set(1,.86,1.06);foot.name=`FootMesh_${s}`;
-    rigid.push({mesh:foot,bone:`foot_${s}`});
+    const foot=createFoot(H,H*.037*p.bodyMass,H*.074,M.shoe);foot.position.set(sx*x*.965,0,H*.044);foot.scale.set(1,.86,1.06);foot.name=`FootMesh_${s}`;rigid.push({mesh:foot,bone:`foot_${s}`});
   }
   return {meshes,rigid};
 }
 
 function createArmParts(h,p,M){
   const meshes=[],H=p.H,armLen=H*.318*h.armLength,upperLen=armLen*.50,lowerLen=armLen*.43,x=p.shoulderHalf*.94,y=p.shoulderY-H*.020;
-  const upperTop=H*.031*p.bodyMass*(1+(p.muscle-1)*.34);
-  const upperMid=H*.027*p.bodyMass*(1+(p.muscle-1)*.30);
-  const elbowR=H*.0205*p.bodyMass;
-  const foreMax=H*.0245*p.bodyMass*(1+(p.muscle-1)*.25);
-  const wristR=H*.0165*p.bodyMass;
+  const upperTop=H*.031*p.bodyMass*(1+(p.muscle-1)*.34),upperMid=H*.027*p.bodyMass*(1+(p.muscle-1)*.30),elbowR=H*.0205*p.bodyMass,foreMax=H*.0245*p.bodyMass*(1+(p.muscle-1)*.25),wristR=H*.0165*p.bodyMass;
   for(const sx of [-1,1]){
-    const s=sx<0?'L':'R';
-    const elbow=[sx*(x+H*.010),y-upperLen,H*.004];
-    const wrist=[sx*(x+H*.014),y-upperLen-lowerLen,H*.008];
-    const upper=createTaperedLimb({
-      start:[sx*x,y,0],end:elbow,radii:[upperTop,upperMid,elbowR],
-      material:M.skin,radialSegments:34,segments:18,ellipticity:.95
-    });
-    upper.name=`UpperArmMesh_${s}`;meshes.push(upper);
-    const fore=createTaperedLimb({
-      start:elbow,end:wrist,radii:[elbowR,foreMax,wristR],
-      material:M.skin,radialSegments:32,segments:18,ellipticity:.93
-    });
-    fore.name=`ForearmMesh_${s}`;meshes.push(fore);
+    const s=sx<0?'L':'R',elbow=[sx*(x+H*.010),y-upperLen,H*.004],wrist=[sx*(x+H*.014),y-upperLen-lowerLen,H*.008];
+    const upper=createTaperedLimb({start:[sx*x,y,0],end:elbow,radii:[upperTop,upperMid,elbowR],material:M.skin,radialSegments:36,segments:20,ellipticity:.95});upper.name=`UpperArmMesh_${s}`;meshes.push(upper);
+    const fore=createTaperedLimb({start:elbow,end:wrist,radii:[elbowR,foreMax,wristR],material:M.skin,radialSegments:34,segments:20,ellipticity:.93});fore.name=`ForearmMesh_${s}`;meshes.push(fore);
   }
   return meshes;
 }
 
 export function generateHuman(input){
   const h=resolveHumanProfile(input),root=new THREE.Group();root.name='ProceduralHuman';
-  const H=h.height,female=h.sex==='female',bodyMass=h.bodyMass;
-  const legLen=H*.455*h.legLength,torsoLen=H*.285*h.torsoLength,hipY=legLen,shoulderY=hipY+torsoLen;
-  const headR=H*.079*h.headScale;
-  const headY=shoulderY+H*.108+headR*.93;
-  const shoulderHalf=H*.109*h.shoulderWidth*(female?.95:1.07),hipHalf=H*.086*h.hipWidth*(female?1.08:.96);
+  const a=buildAnthropometricProfile(h);
+  const H=a.H,female=a.female,bodyMass=h.bodyMass;
+  const legLen=Math.max(H*.39,a.hipY),torsoLen=Math.max(H*.245,a.shoulderY-a.hipY),hipY=a.hipY,shoulderY=a.shoulderY;
+  const headR=a.headR,headY=a.headY,shoulderHalf=a.shoulderHalf,hipHalf=a.hipHalf;
   const p={
     H,female,bodyMass,legLen,torsoLen,hipY,shoulderY,headR,headY,shoulderHalf,hipHalf,
     shoulderWidth:h.shoulderWidth,hipWidth:h.hipWidth,waistWidth:h.waistWidth,chestWidth:h.chestWidth,
@@ -98,53 +77,33 @@ export function generateHuman(input){
 
   const rig=createHumanoidRig(p);root.add(rig);root.updateMatrixWorld(true);
   const skinSources=[];
+  const pelvis=createPelvisMesh(p,M.skin,68);pelvis.name='PelvisSurface';skinSources.push(pelvis);
+  const torso=createTorsoMesh(p,M.skin,80);torso.name='TorsoAnatomy';skinSources.push(torso);
+  const head=createHeadMesh(p,M.skin,104,76);head.name='ParametricHead';refineHeadSurface(head,a,h);skinSources.push(head);
 
-  const pelvis=createPelvisMesh(p,M.skin,64);pelvis.name='PelvisSurface';skinSources.push(pelvis);
-  const torso=createTorsoMesh(p,M.skin,72);torso.name='TorsoAnatomy';skinSources.push(torso);
-  const head=createHeadMesh(p,M.skin,88,64);head.name='ParametricHead';skinSources.push(head);
+  const legs=createLegParts(h,p,M),arms=createArmParts(h,p,M);skinSources.push(...legs.meshes,...arms);
+  refineBodySurface([pelvis,torso,...legs.meshes,...arms],a,h);
 
-  const legs=createLegParts(h,p,M);skinSources.push(...legs.meshes,...createArmParts(h,p,M));
   const continuity=createJointContinuityMeshes(p,M);continuity.children.forEach(m=>skinSources.push(m));
   const shoulders=createShoulderCaps(p,M.skin);shoulders.children.forEach(m=>skinSources.push(m));
   skinSources.push(createKneeCap(p,'L',M.skin),createKneeCap(p,'R',M.skin));
-
   const skinned=skinSources.map(m=>autoSkinMesh(m,rig,p));skinned.forEach(m=>root.add(m));
 
   const neck=createAnatomicalNeck(p,M.skin);attachPreservingWorld(root,rig.userData.bones.neck,neck);
-
-  const garmentPack=createConformingGarment(h,p);
-  const oldShell=garmentPack.shell;
-  garmentPack.group.remove(oldShell);
-  const garmentSkinned=autoSkinMesh(oldShell,rig,p);
-  garmentPack.group.add(garmentSkinned);
-  root.add(garmentPack.group);
-
+  const garmentPack=createConformingGarment(h,p),oldShell=garmentPack.shell;garmentPack.group.remove(oldShell);const garmentSkinned=autoSkinMesh(oldShell,rig,p);garmentPack.group.add(garmentSkinned);root.add(garmentPack.group);
   const face=createHumanFaceAssembly(h,p,M);attachPreservingWorld(root,rig.userData.bones.head,face);
   const hair=createProceduralHair(h,p);attachPreservingWorld(root,rig.userData.bones.head,hair);
 
-  for(const side of ['L','R']){
-    for(const item of createDetailedHandGeometry(p,side,M.skin,h)){
-      if(rig.userData.bones[item.bone]) attachLocal(rig.userData.bones[item.bone],item.mesh,item.localOffset);
-    }
-  }
-  for(const item of legs.rigid) if(rig.userData.bones[item.bone]) attachPreservingWorld(root,rig.userData.bones[item.bone],item.mesh);
+  for(const side of ['L','R'])for(const item of createDetailedHandGeometry(p,side,M.skin,h))if(rig.userData.bones[item.bone])attachLocal(rig.userData.bones[item.bone],item.mesh,item.localOffset);
+  for(const item of legs.rigid)if(rig.userData.bones[item.bone])attachPreservingWorld(root,rig.userData.bones[item.bone],item.mesh);
 
   const rigHelper=createRigHelper(rig,!!h.rigVisible);root.add(rigHelper);
-  const poseController=createPoseController(rig,h);
-  const facialController=createFacialController(face,h);
-  const faceMorph=createFaceMorphController(skinned.find(m=>m.name==='ParametricHead'),p,h);
-  const correctives=createCorrectiveController([...skinned,garmentSkinned],rig,p,h);
-  const jointVolumes=createJointVolumeController(continuity,rig,h.continuityStrength??.80);
-  const garmentDynamics=createGarmentDynamicsController(garmentPack.group,h);
-
-  root.userData.update=time=>{
-    poseController(time);facialController(time);faceMorph(time);correctives(time);jointVolumes(time);
-    garmentDynamics(time);updateHairSecondaryMotion(hair,time,h);
-    if(h.animation==='idle')root.rotation.y=Math.sin(time*.28)*.006*(h.animationStrength??.55);
-  };
-  root.userData.profile=h;
-  root.userData.rig={type:'humanoid-v4',bones:Object.keys(rig.userData.bones),retarget:rig.userData.retarget,autoSkin:'nearest-bone-semantic-v1',ik:!!h.ikEnabled,correctives:true};
-  root.userData.systems={hair:hair.userData.hair,garment:garmentPack.group.userData.garment,continuity:continuity.userData.continuity,face:'anatomical-assembly-v2',faceMorphs:true,hands:'five-finger-3-phalanx'};
-  root.userData.stats={height:H,age:Math.round(h.age??0),autonomy:h.autonomy??0,mode:'parametric-human-v8',parts:root.children.length,topology:'anatomical-skinned-modular',fidelity:'human-mannequin-realism-pass-1'};
+  const poseController=createPoseController(rig,h),facialController=createFacialController(face,h),faceMorph=createFaceMorphController(skinned.find(m=>m.name==='ParametricHead'),p,h);
+  const correctives=createCorrectiveController([...skinned,garmentSkinned],rig,p,h),jointVolumes=createJointVolumeController(continuity,rig,h.continuityStrength??.80),garmentDynamics=createGarmentDynamicsController(garmentPack.group,h);
+  root.userData.update=time=>{poseController(time);facialController(time);faceMorph(time);correctives(time);jointVolumes(time);garmentDynamics(time);updateHairSecondaryMotion(hair,time,h);if(h.animation==='idle')root.rotation.y=Math.sin(time*.28)*.006*(h.animationStrength??.55);};
+  root.userData.profile=h;root.userData.anthropometry=a;
+  root.userData.rig={type:'humanoid-v5',bones:Object.keys(rig.userData.bones),retarget:rig.userData.retarget,autoSkin:'nearest-bone-semantic-v1',ik:!!h.ikEnabled,correctives:true};
+  root.userData.systems={hair:hair.userData.hair,garment:garmentPack.group.userData.garment,continuity:continuity.userData.continuity,face:'anatomical-assembly-v3',surfaceRefinement:'anthropometric-rbf',faceMorphs:true,hands:'five-finger-3-phalanx'};
+  root.userData.stats={height:H,age:Math.round(h.age??0),autonomy:h.autonomy??0,mode:'parametric-human-v9',parts:root.children.length,topology:'anthropometric-rbf-skinned-modular',fidelity:'human-mannequin-realism-pass-2'};
   return root;
 }
