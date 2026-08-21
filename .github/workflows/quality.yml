@@ -25,6 +25,7 @@ jobs:
           test -f src/generators/human.js
           test -f src/generators/city.js
           test -f src/generators/human-profile.js
+          test -f src/generators/anthropometry.js
           test -f src/generators/facial-animation.js
           test -f src/generators/face-morphs.js
           test -f src/generators/hair-system.js
@@ -32,6 +33,8 @@ jobs:
           test -f src/generators/urban-plan.js
           test -f src/geometry/anatomy.js
           test -f src/geometry/human-realism.js
+          test -f src/geometry/human-surface-refinement.js
+          test -f src/geometry/rbf-deformer.js
           test -f src/geometry/hands.js
           test -f src/geometry/body-continuity.js
           test -f src/rig/skeleton.js
