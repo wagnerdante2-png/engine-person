@@ -67,10 +67,13 @@ function createSafeHead(h,a,p,M,humanModel){
     const head=createFlameOpenHead(h,a,M.skin);head.name='ParametricHead';
     const count=head.geometry?.attributes?.position?.count??0;
     if(count<100)throw new Error(`FLAME mesh inválida: ${count} vértices`);
-    humanModel.applyExpression(head);
+    // FLAME geometry is authoritative. Do not run the old EPHM procedural face
+    // deformer over it. FLAME shape/expression bases are loaded separately from
+    // the official shapedirs chunks.
     applyProceduralSkinColors(head,h,(h.seed??1)+911);
-    head.userData.enginePersonHead={source:'FLAME2023_Open',fallback:false};
-    return {head,flame:true};
+    const flame=head.userData.flame??{};
+    head.userData.enginePersonHead={source:'FLAME2023_Open',fallback:false,exact:!!flame.exact};
+    return {head,flame:true,exact:!!flame.exact,vertices:flame.vertexCount??count,faces:flame.faceCount??0};
   }catch(error){
     console.error('[Engine Person] FLAME head failed; using safe procedural fallback.',error);
     const head=createHeadMesh(p,M.skin,128,92);head.name='ParametricHead';
@@ -81,7 +84,7 @@ function createSafeHead(h,a,p,M,humanModel){
     humanModel.applyExpression(head);
     applyProceduralSkinColors(head,h,(h.seed??1)+911);
     head.userData.enginePersonHead={source:'procedural-fallback',fallback:true,error:String(error?.message??error)};
-    return {head,flame:false};
+    return {head,flame:false,exact:false,vertices:head.geometry?.attributes?.position?.count??0,faces:(head.geometry?.index?.count??0)/3};
   }
 }
 
@@ -99,9 +102,6 @@ export function generateHuman(input){
   const pelvis=createPelvisMesh(p,M.skin,76);pelvis.name='PelvisSurface';humanModel.applyIdentity(pelvis,'body');prepareSkinMesh(pelvis,h,a,'body');skinSources.push(pelvis);
   const torso=createTorsoMesh(p,M.skin,88);torso.name='TorsoAnatomy';humanModel.applyIdentity(torso,'body');prepareSkinMesh(torso,h,a,'body');skinSources.push(torso);
 
-  // Keep FLAME outside auto-skinning during the first integration pass. The head is
-  // attached rigidly to the canonical head bone, which prevents a malformed FLAME
-  // payload or head-specific skin weights from taking down the whole character.
   const headPack=createSafeHead(h,a,p,M,humanModel),head=headPack.head;
   const landmarkEmbedding=buildStaticLandmarkEmbedding(head,a,h);
 
@@ -133,7 +133,7 @@ export function generateHuman(input){
   root.userData.profile=h;root.userData.anthropometry=a;root.userData.humanModel=humanModel.metadata();
   root.userData.landmarks={embedding:landmarkEmbedding,static:()=>readLandmarks(head,landmarkEmbedding),dynamicContour:()=>dynamicContourLandmarks(head,a,h,THREE.MathUtils.degToRad(h.neckYaw??0))};
   root.userData.rig={type:'humanoid-v9',bones:Object.keys(rig.userData.bones),retarget:rig.userData.retarget,autoSkin:'nearest-bone-semantic-v1',ik:!!h.ikEnabled,correctives:true,articulatedFace:true};
-  root.userData.systems={humanModel:'EPHM-1.4',headBase:headPack.flame?'FLAME2023_Open-CC-BY-4.0':'procedural-fallback',shapeSpace:'engine-person-shape-v1-body',expressionSpace:'ephm-expression-v1',landmarks:'static+dynamic-contour-v1',faceArticulation:'neck-jaw-eyes-v1',regionalAnatomy:'regional-fields-v2-body',skinSurface:'procedural-microvariation-v1',hair:hair.userData.hair,garment:garmentPack.group.userData.garment,continuity:continuity.userData.continuity,hands:'five-finger-3-phalanx'};
-  root.userData.stats={height:H,age:Math.round(h.age??0),autonomy:h.autonomy??0,mode:'parametric-human-v14.1',parts:root.children.length,topology:headPack.flame?'flame-head+ephm-body':'fallback-head+ephm-body',fidelity:'FLAME-base-integration-safe-pass'};
+  root.userData.systems={humanModel:'EPHM-1.5',headBase:headPack.flame?(headPack.exact?'FLAME2023_Open-full':'FLAME2023_Open-preview'):'procedural-fallback',shapeSpace:'FLAME-shapedirs-pending-runtime+engine-person-body',expressionSpace:'FLAME-expression-components-pending-runtime',landmarks:'static+dynamic-contour-v1',faceArticulation:'neck-jaw-eyes-v1',regionalAnatomy:'regional-fields-v2-body',skinSurface:'procedural-microvariation-v1',hair:hair.userData.hair,garment:garmentPack.group.userData.garment,continuity:continuity.userData.continuity,hands:'five-finger-3-phalanx'};
+  root.userData.stats={height:H,age:Math.round(h.age??0),autonomy:h.autonomy??0,mode:'parametric-human-v15',parts:root.children.length,topology:headPack.exact?'FLAME-5023v-9976f+EPHM-body':headPack.flame?'FLAME-preview+EPHM-body':'fallback-head+EPHM-body',fidelity:headPack.exact?'FLAME2023-Open-exact-template':'FLAME-runtime-fallback',headVertices:headPack.vertices,headFaces:headPack.faces};
   return root;
 }
