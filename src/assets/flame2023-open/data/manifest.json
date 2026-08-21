@@ -1,0 +1,35 @@
+{
+  "source": "FLAME2023_Open",
+  "license": "CC BY 4.0",
+  "vertexCount": 5023,
+  "faceCount": 9976,
+  "jointCount": 5,
+  "shapeComponents": 300,
+  "expressionComponents": 100,
+  "allShapeComponents": 400,
+  "poseComponents": 36,
+  "expressionLayout": "last_100",
+  "bounds": {
+    "min": [-0.10978439, -0.18724249, -0.15323224],
+    "max": [0.10776618, 0.13212054, 0.07508866]
+  },
+  "files": {
+    "v_template": {"file":"v_template.f32","bytes":60276,"shape":[5023,3],"dtype":"float32"},
+    "faces": {"file":"faces.u16","bytes":59856,"shape":[9976,3],"dtype":"uint16"},
+    "weights": {"file":"weights.f32","bytes":100460,"shape":[5023,5],"dtype":"float32"},
+    "joints": {"file":"joints.f32","bytes":60,"shape":[5,3],"dtype":"float32"},
+    "j_regressor": {"file":"j_regressor.f32","bytes":100460,"shape":[5,5023],"dtype":"float32"},
+    "kintree": {"file":"kintree.i32","bytes":40,"shape":[2,5],"dtype":"int32"},
+    "posedirs": {"file":"posedirs.f32","bytes":2169936,"shape":[5023,3,36],"dtype":"float32"}
+  },
+  "shapeChunks": [
+    {"start":0,"count":50,"file":"shapedirs_000_049.f32","bytes":3013800},
+    {"start":50,"count":50,"file":"shapedirs_050_099.f32","bytes":3013800},
+    {"start":100,"count":50,"file":"shapedirs_100_149.f32","bytes":3013800},
+    {"start":150,"count":50,"file":"shapedirs_150_199.f32","bytes":3013800},
+    {"start":200,"count":50,"file":"shapedirs_200_249.f32","bytes":3013800},
+    {"start":250,"count":50,"file":"shapedirs_250_299.f32","bytes":3013800},
+    {"start":300,"count":50,"file":"shapedirs_300_349.f32","bytes":3013800},
+    {"start":350,"count":50,"file":"shapedirs_350_399.f32","bytes":3013800}
+  ]
+}
