@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 1,
+  version: 2,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
@@ -9,18 +9,32 @@ export const defaultState = {
     shoulderWidth: 0.96,
     torsoLength: 1.00,
     hipWidth: 1.00,
+    waistWidth: 1.00,
+    chestWidth: 1.00,
+    chestDepth: 1.00,
+    glute: 1.00,
+    muscle: 1.00,
+    neckThickness: 1.00,
     legLength: 1.00,
     armLength: 1.00,
     bodyMass: 0.95,
     headScale: 1.00,
     faceWidth: 1.00,
+    headDepth: 1.00,
     jawWidth: 0.94,
+    cheekbones: 1.00,
+    chinSize: 1.00,
     noseScale: 1.00,
+    noseWidth: 1.00,
     eyeScale: 1.00,
+    eyeSpacing: 1.00,
+    mouthWidth: 1.00,
+    lipColor: '#9b5b57',
     skin: '#c98f72',
     hair: '#4a2b20',
     eyes: '#5c493d',
     hairStyle: 'long-side',
+    hairLength: 1.00,
     outfit: 'casual',
     topColor: '#191b22',
     bottomColor: '#20334a'
@@ -50,10 +64,21 @@ export function cloneState(source = defaultState) {
   return JSON.parse(JSON.stringify(source));
 }
 
+function mergeDeep(base, incoming) {
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return incoming ?? base;
+  const out = { ...base };
+  for (const [key, value] of Object.entries(incoming)) {
+    out[key] = value && typeof value === 'object' && !Array.isArray(value)
+      ? mergeDeep(base?.[key] ?? {}, value)
+      : value;
+  }
+  return out;
+}
+
 export class Store extends EventTarget {
   constructor(initial = defaultState) {
     super();
-    this.state = cloneState(initial);
+    this.state = cloneState(mergeDeep(defaultState, initial));
   }
 
   get(path) {
@@ -69,7 +94,8 @@ export class Store extends EventTarget {
   }
 
   replace(next) {
-    this.state = cloneState({ ...defaultState, ...next });
+    this.state = cloneState(mergeDeep(defaultState, next));
+    this.state.version = defaultState.version;
     this.dispatchEvent(new CustomEvent('replace', { detail: { state: this.state } }));
   }
 
