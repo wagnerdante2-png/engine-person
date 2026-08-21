@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 13,
+  version: 14,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
