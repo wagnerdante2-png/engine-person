@@ -17,7 +17,8 @@ function renderCurrent() {
     const obj = generateHuman({ ...store.state.human, seed: store.state.seed });
     runtime.setObject(obj, { mode:'human' });
     const s = obj.userData.stats;
-    stats.textContent = `Pessoa paramétrica · ${s.parts} componentes · ${s.height.toFixed(2)} m · autonomia ${Math.round(s.autonomy*100)}%`;
+    const bones = obj.userData.rig?.bones?.length ?? 0;
+    stats.textContent = `Pessoa paramétrica · ${bones} ossos · ${store.get('human.pose')} · ${store.get('human.animation')} · ${s.height.toFixed(2)} m · autonomia ${Math.round(s.autonomy*100)}%`;
     modeLabel.textContent = 'PERSON DESIGN';
     seedLabel.textContent = String(store.get('seed')).padStart(6,'0');
   } else if (mode === 'city') {
