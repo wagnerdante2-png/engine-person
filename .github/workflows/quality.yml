@@ -27,9 +27,12 @@ jobs:
           test -f src/generators/human-profile.js
           test -f src/generators/facial-animation.js
           test -f src/generators/face-morphs.js
+          test -f src/generators/hair-system.js
+          test -f src/generators/garment-system.js
           test -f src/generators/urban-plan.js
           test -f src/geometry/anatomy.js
           test -f src/geometry/hands.js
+          test -f src/geometry/body-continuity.js
           test -f src/rig/skeleton.js
           test -f src/rig/skinning.js
           test -f src/rig/correctives.js
