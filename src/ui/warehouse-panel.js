@@ -12,6 +12,9 @@ const schema={title:'Centro de Distribuição',sections:[
     STEPPER('warehouse.bays','Posições no comprimento',1,16,1),
     STEPPER('warehouse.levels','Posições na altura',1,7,1)
   ],html:'<p class="warehouse-dimension-hint">Ex.: 30 longarinas × 16 posições de comprimento × 7 posições de altura.</p>'},
+  {title:'Identificação das posições',controls:[
+    TOGGLE('warehouse.showPositionLabels','Placas digitais',[[true,'Mostrar'],[false,'Ocultar']])
+  ],html:'<p class="warehouse-dimension-hint">As placas usam identificação digital de baixo brilho com traços neurais e pulso sutil de status.</p>'},
   {title:'Estrutura das longarinas',controls:[
     RANGE('warehouse.bayWidth','Largura do módulo',1.10,2.20,.05,' m'),
     RANGE('warehouse.rackDepth','Profundidade do rack',.80,1.50,.05,' m'),
@@ -22,7 +25,7 @@ const schema={title:'Centro de Distribuição',sections:[
     RANGE('warehouse.occupancy','Ocupação dos paletes',0,1,.01),
     STEPPER('warehouse.forklifts','Empilhadeiras',0,6,1)
   ],html:'<p class="warehouse-dimension-hint">0 remove todas as empilhadeiras. Ao adicionar, elas são posicionadas automaticamente no eixo central dos corredores.</p>'},
-  {title:'Leitura operacional',html:'<p style="font-size:11px;color:#9ba8b8;line-height:1.55;margin:0">Use Unitária/Dupla para alternar entre uma ou duas longarinas encostadas de cada lado do corredor. As empilhadeiras permanecem centralizadas na rua e não atravessam as longarinas.</p>'}
+  {title:'Leitura operacional',html:'<p style="font-size:11px;color:#9ba8b8;line-height:1.55;margin:0">Use Unitária/Dupla para alternar entre uma ou duas longarinas encostadas de cada lado do corredor. As placas podem ser exibidas ou ocultadas sem alterar os endereços das posições.</p>'}
 ]};
 
 function formatValue(c,v){if(c.step>=1)return`${Math.round(v)}${c.suffix??''}`;const digits=c.step<.01?3:c.step<.1?2:1;return`${Number(v).toFixed(digits)}${c.suffix??''}`;}
