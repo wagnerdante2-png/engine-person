@@ -31,8 +31,7 @@ function createPallet(rand,width,depth,loadHeight,fill){
         if(rand()<.08) continue;
         const material=mat(BOXES[Math.floor(rand()*BOXES.length)],.92);
         const px=-usableW/2+bw/2+c*(bw+gap), pz=-usableD/2+bd/2+r*(bd+gap);
-        const carton=box(bw*.96,bh,bd*.96,material,px,palletH+bh/2+l*bh,pz);
-        g.add(carton);
+        g.add(box(bw*.96,bh,bd*.96,material,px,palletH+bh/2+l*bh,pz));
       }
     }
   }
@@ -40,7 +39,7 @@ function createPallet(rand,width,depth,loadHeight,fill){
   return g;
 }
 
-function createRackRow(config,rowIndex,rand){
+function createRackRow(config,rowIndex){
   const g=new THREE.Group();
   const uprightMat=mat(BLUE,.62,.34), beamMat=mat(BEAM,.58,.30), footMat=mat(BLUE_DARK,.68,.28), braceMat=mat(STEEL,.65,.34);
   const { bays, levels, bayWidth, rackDepth, levelHeight, occupancy }=config;
@@ -59,8 +58,6 @@ function createRackRow(config,rowIndex,rand){
         const y=.34+(l+1)*levelHeight;
         for(const z of[-rackDepth/2,rackDepth/2]) g.add(box(bayWidth-.08,.10,.09,beamMat,(x+nx)/2,y,z));
       }
-    }
-    if(b<bays){
       const braceY=uprightH*.48;
       for(const z of[-rackDepth/2,rackDepth/2]){
         const brace=new THREE.Mesh(new THREE.BoxGeometry(.035,uprightH*.80,.035),braceMat);
@@ -89,7 +86,7 @@ function createRackRow(config,rowIndex,rand){
   return g;
 }
 
-function addFloorMarkings(root,width,depth,aisleWidth,rows){
+function addFloorMarkings(root,width,depth,rows){
   const floor=box(width,.08,depth,mat(FLOOR,.96),0,.02,0); root.add(floor);
   const lineMat=mat(SAFETY,.72), white=mat('#d9dde2',.74);
   const edgeX=width/2-.45;
@@ -120,20 +117,38 @@ function createForklift(){
 export function generateWarehouse(c){
   const root=new THREE.Group(); root.name='ProceduralWarehouse';
   const rand=mulberry32(c.seed??314159);
-  const rows=Math.max(2,Math.round(c.rows??5)), bays=Math.max(2,Math.round(c.bays??7)), levels=Math.max(1,Math.round(c.levels??4));
+  const requestedRows=Math.max(1,Math.round(c.rows??5));
+  const rows=Math.max(2,requestedRows), bays=Math.max(1,Math.round(c.bays??7)), levels=Math.max(1,Math.round(c.levels??4));
+  const rackType=c.rackType==='double'?'double':'unitary';
   const bayWidth=c.bayWidth??1.55, rackDepth=c.rackDepth??1.08, levelHeight=c.levelHeight??1.05, aisleWidth=c.aisleWidth??2.45;
   const rowPitch=rackDepth+aisleWidth;
-  const width=bays*bayWidth+2.2, depth=rows*rackDepth+(rows-1)*aisleWidth+3.0;
-  addFloorMarkings(root,width,depth,aisleWidth,rows);
-  let palletPositions=0, occupiedPositions=0;
-  for(let r=0;r<rows;r++){
-    const rack=createRackRow({ ...c,bays,levels,bayWidth,rackDepth,levelHeight,seed:c.seed??314159 },r,rand);
-    rack.position.z=-(rows-1)*rowPitch/2+r*rowPitch;
+  const doubleOffset=rackDepth*.98;
+  const width=bays*bayWidth+2.2;
+  const baseDepth=rows*rackDepth+(rows-1)*aisleWidth+3.0;
+  const depth=baseDepth+(rackType==='double'?rackDepth*2:0);
+  addFloorMarkings(root,width,depth,rows);
+
+  let palletPositions=0, occupiedPositions=0, physicalRackRows=0;
+  const addRack=(z,rowIndex,labelIndex)=>{
+    const rack=createRackRow({ ...c,bays,levels,bayWidth,rackDepth,levelHeight,seed:c.seed??314159 },rowIndex);
+    rack.position.z=z;
     root.add(rack);
-    palletPositions+=rack.userData.palletCount; occupiedPositions+=rack.userData.occupied;
-    const id=box(.52,.24,.025,mat('#e9eef4',.72),-width/2+.36,levels*levelHeight+.10,rack.position.z-rackDepth/2-.03);
-    id.userData.label=`R${String(r+1).padStart(2,'0')}`; root.add(id);
+    physicalRackRows++;
+    palletPositions+=rack.userData.palletCount;
+    occupiedPositions+=rack.userData.occupied;
+    const id=box(.52,.24,.025,mat('#e9eef4',.72),-width/2+.36,levels*levelHeight+.10,z-rackDepth/2-.03);
+    id.userData.label=`R${String(labelIndex).padStart(2,'0')}`; root.add(id);
+  };
+
+  for(let r=0;r<rows;r++){
+    const z=-(rows-1)*rowPitch/2+r*rowPitch;
+    addRack(z,r*2+1,r+1);
+    if(rackType==='double'){
+      const direction=z<0?-1:z>0?1:(r<rows/2?-1:1);
+      addRack(z+direction*doubleOffset,r*2+2,`${r+1}B`);
+    }
   }
+
   if(c.showForklifts!==false){
     const forklifts=Math.max(1,Math.round(c.forklifts??2));
     for(let i=0;i<forklifts;i++){
@@ -143,9 +158,10 @@ export function generateWarehouse(c){
       f.rotation.y=rand()>.5?Math.PI/2:-Math.PI/2; root.add(f);
     }
   }
+
   root.userData.stats={
-    mode:'procedural-warehouse-v1', rows,bays,levels,
-    rackModules:rows*bays,
+    mode:'procedural-warehouse-v2', rackType, requestedRows, rows, physicalRackRows,bays,levels,
+    rackModules:physicalRackRows*bays,
     palletPositions, occupiedPositions,
     occupancy:palletPositions?occupiedPositions/palletPositions:0,
     aisles:Math.max(1,rows-1), forklifts:c.showForklifts===false?0:Math.max(1,Math.round(c.forklifts??2)),
