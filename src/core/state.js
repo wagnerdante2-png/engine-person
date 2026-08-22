@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 17,
+  version: 18,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
@@ -53,7 +53,8 @@ export const defaultState = {
     aisleWidth: 2.45,
     occupancy: .82,
     forklifts: 2,
-    showForklifts: true
+    showForklifts: true,
+    showPositionLabels: true
   },
   environment: { timeOfDay: 15.6, exposure: 1.18, ground: '#151a22', autoRotate: false, grid: true }
 };
