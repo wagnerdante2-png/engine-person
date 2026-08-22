@@ -1,8 +1,12 @@
 const RANGE=(path,label,min,max,step=.01,suffix='')=>({type:'range',path,label,min,max,step,suffix});
 const CHECK=(path,label)=>({type:'check',path,label});
 const STEPPER=(path,label,min,max,step=1,suffix='')=>({type:'stepper',path,label,min,max,step,suffix});
+const TOGGLE=(path,label,options)=>({type:'toggle',path,label,options});
 
 const schema={title:'Centro de Distribuição',sections:[
+  {title:'Configuração das longarinas',controls:[
+    TOGGLE('warehouse.rackType','Tipo de configuração',[['unitary','Unitária'],['double','Dupla']])
+  ],html:'<p class="warehouse-dimension-hint">Unitária: uma longarina de cada lado da rua. Dupla: duas longarinas encostadas, costas com costas, em cada lado da rua.</p>'},
   {title:'Dimensionamento rápido',controls:[
     STEPPER('warehouse.rows','Longarinas',1,30,1),
     STEPPER('warehouse.bays','Posições no comprimento',1,16,1),
@@ -19,7 +23,7 @@ const schema={title:'Centro de Distribuição',sections:[
     CHECK('warehouse.showForklifts','Exibir empilhadeiras'),
     RANGE('warehouse.forklifts','Empilhadeiras',1,6,1)
   ]},
-  {title:'Leitura operacional',html:'<p style="font-size:11px;color:#9ba8b8;line-height:1.55;margin:0">Use os botões − e + para aumentar ou reduzir instantaneamente o número de longarinas, posições horizontais e níveis. O cenário 3D é regenerado a cada alteração mantendo a seed atual.</p>'}
+  {title:'Leitura operacional',html:'<p style="font-size:11px;color:#9ba8b8;line-height:1.55;margin:0">Use Unitária/Dupla para alternar entre uma ou duas longarinas encostadas de cada lado do corredor. O corredor permanece livre no centro.</p>'}
 ]};
 
 function formatValue(c,v){if(c.step>=1)return`${Math.round(v)}${c.suffix??''}`;const digits=c.step<.01?3:c.step<.1?2:1;return`${Number(v).toFixed(digits)}${c.suffix??''}`;}
@@ -28,7 +32,11 @@ export class WarehousePanelUI{
   constructor(store,onChange){this.store=store;this.onChange=onChange;this.title=document.querySelector('#panelTitle');this.content=document.querySelector('#panelContent');}
   render(){this.title.textContent=schema.title;this.content.innerHTML='';schema.sections.forEach(section=>{const el=document.createElement('section');el.className='section';el.innerHTML=`<h3>${section.title}</h3>`;if(section.html)el.insertAdjacentHTML('beforeend',section.html);if(section.controls)section.controls.forEach(c=>el.appendChild(this.control(c)));this.content.appendChild(el);});}
   control(c){const wrap=document.createElement('div');wrap.className=`control${c.type==='stepper'?' warehouse-stepper-control':''}`;const value=this.store.get(c.path);const label=document.createElement('label');label.textContent=c.label;wrap.appendChild(label);
-    if(c.type==='stepper'){
+    if(c.type==='toggle'){
+      const group=document.createElement('div');group.className='warehouse-toggle';
+      c.options.forEach(([v,text])=>{const btn=document.createElement('button');btn.type='button';btn.className=`warehouse-toggle-btn ${value===v?'active':''}`;btn.textContent=text;btn.addEventListener('click',()=>{if(this.store.get(c.path)===v)return;this.store.set(c.path,v);this.onChange?.(c.path);this.render();});group.appendChild(btn);});
+      wrap.appendChild(group);
+    } else if(c.type==='stepper'){
       const controls=document.createElement('div');controls.className='warehouse-stepper';
       const minus=document.createElement('button');minus.type='button';minus.className='warehouse-stepper-btn';minus.textContent='−';minus.title=`Diminuir ${c.label.toLowerCase()}`;
       const output=document.createElement('output');output.className='warehouse-stepper-value';output.textContent=formatValue(c,value);
