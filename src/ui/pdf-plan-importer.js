@@ -1,159 +1,28 @@
 const PDFJS_URL='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs';
 const PDFJS_WORKER='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
-
+const COLORS={wall:'#7ce7d3',gondola:'#65a8ff',checkout:'#ffb85c',promo:'#d78cff',ignore:'#ff6f7d'};
 function waitEngine(){return new Promise(resolve=>{const tick=()=>window.enginePerson?.store?resolve(window.enginePerson):setTimeout(tick,60);tick();});}
-
-function makeButton(){
-  if(document.querySelector('#pdfPlanImportBtn'))return;
-  const panel=document.querySelector('#panelContent');
-  if(!panel||window.enginePerson?.store?.get('mode')!=='supermarket')return;
-  const section=document.createElement('section');section.className='section';section.id='pdfPlanImportSection';
-  section.innerHTML='<h3>Importar planta</h3><p class="warehouse-dimension-hint">Importe um PDF e delimite a área da planta. O modo Estrutural filtra cotas, mobiliário, gôndolas, símbolos e carimbo, mantendo preferencialmente paredes e divisórias arquitetônicas.</p>';
-  const btn=document.createElement('button');btn.id='pdfPlanImportBtn';btn.type='button';btn.className='primary';btn.textContent='Importar planta PDF';btn.onclick=openImporter;section.appendChild(btn);
-  panel.prepend(section);
-}
-
-function modalShell(){
-  document.querySelector('#pdfPlanImporterModal')?.remove();
-  const overlay=document.createElement('div');overlay.id='pdfPlanImporterModal';overlay.className='pdf-import-overlay';
-  overlay.innerHTML=`<div class="pdf-import-modal">
-    <aside class="pdf-import-side">
-      <div class="eyebrow">IMPORTADOR DE PLANTA</div><h2>PDF → Planta 2D/3D</h2>
-      <p class="warehouse-dimension-hint">1. Carregue o PDF. 2. Arraste um retângulo sobre somente a planta que deseja importar. 3. Use <b>Estrutural</b> para eliminar gôndolas, cotas, textos e detalhes.</p>
-      <label class="pdf-import-label">Arquivo PDF<input id="pdfImportFile" type="file" accept="application/pdf"></label>
-      <label class="pdf-import-label">Página<select id="pdfImportPage"><option value="1">1</option></select></label>
-      <label class="pdf-import-label">Largura real da área selecionada (m)<input id="pdfImportWidthM" type="number" min="5" max="1000" step="0.5" value="30"></label>
-      <label class="pdf-import-label">Modo de leitura<select id="pdfImportMode"><option value="structural" selected>Estrutural — paredes/divisórias</option><option value="all">Todas as linhas ortogonais</option></select></label>
-      <label class="pdf-import-label">Filtro estrutural<input id="pdfImportTolerance" type="range" min="1" max="10" step="0.5" value="5"><output id="pdfImportToleranceOut">5.0</output></label>
-      <div class="pdf-import-stats" id="pdfImportStats">Selecione um PDF.</div>
-      <button id="pdfImportResetCrop" class="ghost-btn" disabled>Limpar seleção da planta</button>
-      <button id="pdfImportDetect" class="ghost-btn" disabled>Reprocessar paredes</button>
-      <button id="pdfImportApply" class="primary" disabled>Gerar planta 3D</button>
-      <button id="pdfImportClose" class="ghost-btn">Fechar</button>
-    </aside>
-    <main class="pdf-import-preview"><div class="pdf-import-toolbar"><span>Prévia — arraste para selecionar a planta</span><span id="pdfImportPageInfo"></span></div><div class="pdf-import-canvas-wrap"><canvas id="pdfImportCanvas"></canvas><canvas id="pdfImportOverlay" style="cursor:crosshair"></canvas></div></main>
-  </div>`;
-  document.body.appendChild(overlay);
-  overlay.querySelector('#pdfImportClose').onclick=()=>overlay.remove();
-  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
-  return overlay;
-}
-
-let session={pdf:null,page:null,viewport:null,rawSegments:[],segments:[],pdfjs:null,crop:null,dragStart:null};
-
-async function openImporter(){
-  const modal=modalShell();
-  const fileInput=modal.querySelector('#pdfImportFile'),pageSel=modal.querySelector('#pdfImportPage'),tol=modal.querySelector('#pdfImportTolerance'),mode=modal.querySelector('#pdfImportMode');
-  tol.oninput=()=>{modal.querySelector('#pdfImportToleranceOut').textContent=Number(tol.value).toFixed(1);};
-  tol.onchange=()=>extractAndDraw(modal);
-  mode.onchange=()=>extractAndDraw(modal);
-  fileInput.onchange=async()=>{const file=fileInput.files?.[0];if(!file)return;await loadPdf(file,modal);};
-  pageSel.onchange=()=>loadPage(Number(pageSel.value),modal);
-  modal.querySelector('#pdfImportDetect').onclick=()=>extractAndDraw(modal);
-  modal.querySelector('#pdfImportApply').onclick=()=>applyToPlan(modal);
-  modal.querySelector('#pdfImportResetCrop').onclick=()=>{session.crop=null;drawOverlay(modal);extractAndDraw(modal);};
-  installCropInteraction(modal);
-}
-
-function installCropInteraction(modal){
-  const canvas=modal.querySelector('#pdfImportOverlay');
-  const pos=e=>{const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*(canvas.width/r.width),y:(e.clientY-r.top)*(canvas.height/r.height)};};
-  canvas.onpointerdown=e=>{if(!session.page)return;session.dragStart=pos(e);canvas.setPointerCapture(e.pointerId);};
-  canvas.onpointermove=e=>{if(!session.dragStart)return;const p=pos(e),a=session.dragStart;session.crop={x:Math.min(a.x,p.x),y:Math.min(a.y,p.y),w:Math.abs(p.x-a.x),h:Math.abs(p.y-a.y)};drawOverlay(modal,true);};
-  canvas.onpointerup=e=>{if(!session.dragStart)return;session.dragStart=null;if(session.crop?.w<20||session.crop?.h<20)session.crop=null;modal.querySelector('#pdfImportResetCrop').disabled=!session.crop;extractAndDraw(modal);};
-}
-
-async function loadPdf(file,modal){
-  const stats=modal.querySelector('#pdfImportStats');stats.textContent='Carregando PDF…';
-  try{
-    const pdfjs=await import(PDFJS_URL);pdfjs.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;session.pdfjs=pdfjs;
-    const data=new Uint8Array(await file.arrayBuffer());session.pdf=await pdfjs.getDocument({data}).promise;
-    const sel=modal.querySelector('#pdfImportPage');sel.innerHTML='';for(let i=1;i<=session.pdf.numPages;i++){const o=document.createElement('option');o.value=i;o.textContent=i;sel.appendChild(o);}await loadPage(1,modal);
-  }catch(err){console.error(err);stats.textContent=`Falha ao abrir PDF: ${err.message}`;}
-}
-
-async function loadPage(pageNumber,modal){
-  const page=await session.pdf.getPage(pageNumber);session.page=page;session.crop=null;session.rawSegments=[];session.segments=[];
-  const base=page.getViewport({scale:1}),maxW=1200,maxH=760,scale=Math.min(2.1,maxW/base.width,maxH/base.height),viewport=page.getViewport({scale});session.viewport=viewport;
-  const canvas=modal.querySelector('#pdfImportCanvas'),ctx=canvas.getContext('2d');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);await page.render({canvasContext:ctx,viewport}).promise;
-  const overlay=modal.querySelector('#pdfImportOverlay');overlay.width=canvas.width;overlay.height=canvas.height;
-  modal.querySelector('#pdfImportPageInfo').textContent=`página ${pageNumber}/${session.pdf.numPages}`;
-  modal.querySelector('#pdfImportResetCrop').disabled=true;
-  await extractAndDraw(modal);
-}
-
-async function collectRawSegments(){
-  const page=session.page,pdfjs=session.pdfjs,viewport=session.viewport;if(!page||!pdfjs)return[];
-  const opList=await page.getOperatorList(),raw=[];let cx=0,cy=0;
-  const moveTo=pdfjs.OPS.moveTo,lineTo=pdfjs.OPS.lineTo,rectangle=pdfjs.OPS.rectangle;
-  for(let i=0;i<opList.fnArray.length;i++){
-    if(opList.fnArray[i]!==pdfjs.OPS.constructPath)continue;
-    const args=opList.argsArray[i]||[],ops=args[0]||[],pts=args[1]||[];let pi=0;
-    for(const op of ops){
-      if(op===moveTo){cx=pts[pi++];cy=pts[pi++];}
-      else if(op===lineTo){const nx=pts[pi++],ny=pts[pi++];raw.push(convertSegment(cx,cy,nx,ny,viewport));cx=nx;cy=ny;}
-      else if(op===rectangle){const x=pts[pi++],y=pts[pi++],w=pts[pi++],h=pts[pi++];raw.push(convertSegment(x,y,x+w,y,viewport),convertSegment(x+w,y,x+w,y+h,viewport),convertSegment(x+w,y+h,x,y+h,viewport),convertSegment(x,y+h,x,y,viewport));cx=x;cy=y;}
-      else{const arity=(op===pdfjs.OPS.curveTo?6:op===pdfjs.OPS.curveTo2||op===pdfjs.OPS.curveTo3?4:0);pi+=arity;}
-    }
-  }
-  return raw.filter(Boolean);
-}
-function convertSegment(x1,y1,x2,y2,viewport){const a=viewport.convertToViewportPoint(x1,y1),b=viewport.convertToViewportPoint(x2,y2);return{x1:a[0],y1:a[1],x2:b[0],y2:b[1]};}
-
-function inCrop(s){const c=session.crop;if(!c)return true;const mx=(s.x1+s.x2)/2,my=(s.y1+s.y2)/2;return mx>=c.x&&mx<=c.x+c.w&&my>=c.y&&my<=c.y+c.h;}
-function cropBounds(){return session.crop||{x:0,y:0,w:session.viewport?.width||1,h:session.viewport?.height||1};}
-
-function orthogonalize(raw,tolerance){const out=[];for(const s of raw){if(!inCrop(s))continue;const dx=s.x2-s.x1,dy=s.y2-s.y1,len=Math.hypot(dx,dy);if(len<5)continue;const nearH=Math.abs(dy)<=tolerance,nearV=Math.abs(dx)<=tolerance;if(nearH)out.push({x1:s.x1,y1:s.y1,x2:s.x2,y2:s.y1,axis:'h',len:Math.abs(dx)});else if(nearV)out.push({x1:s.x1,y1:s.y1,x2:s.x1,y2:s.y2,axis:'v',len:Math.abs(dy)});}return out;}
-
-function normalizeSegment(s){return s.axis==='h'?{...s,x1:Math.min(s.x1,s.x2),x2:Math.max(s.x1,s.x2)}:{...s,y1:Math.min(s.y1,s.y2),y2:Math.max(s.y1,s.y2)};}
-function mergeCollinear(items,axisTol=2.5,gap=5){
-  const sorted=items.map(normalizeSegment).sort((a,b)=>a.axis.localeCompare(b.axis)||(a.axis==='h'?a.y1-b.y1:a.x1-b.x1)||(a.axis==='h'?a.x1-b.x1:a.y1-b.y1)),out=[];
-  for(const s of sorted){const last=out[out.length-1];if(last&&last.axis===s.axis){if(s.axis==='h'&&Math.abs(last.y1-s.y1)<=axisTol&&s.x1<=last.x2+gap){last.x2=Math.max(last.x2,s.x2);last.len=last.x2-last.x1;continue;}if(s.axis==='v'&&Math.abs(last.x1-s.x1)<=axisTol&&s.y1<=last.y2+gap){last.y2=Math.max(last.y2,s.y2);last.len=last.y2-last.y1;continue;}}out.push({...s});}return out;
-}
-function overlap1D(a1,a2,b1,b2){return Math.max(0,Math.min(a2,b2)-Math.max(a1,b1));}
-function structuralFilter(items,strength){
-  const b=cropBounds(),diag=Math.hypot(b.w,b.h),minLen=diag*(0.018+strength*.0015),veryLong=diag*(0.16+strength*.004),pairGap=3+strength*1.9;
-  const merged=mergeCollinear(items,2.2+strength*.18,5+strength*.7).filter(s=>s.len>=minLen),keep=new Set();
-  for(let i=0;i<merged.length;i++){
-    const a=merged[i];
-    if(a.len>=veryLong)keep.add(i);
-    for(let j=i+1;j<merged.length;j++){
-      const d=merged[j];if(a.axis!==d.axis)continue;
-      const gap=a.axis==='h'?Math.abs(a.y1-d.y1):Math.abs(a.x1-d.x1);if(gap<1||gap>pairGap)continue;
-      const ov=a.axis==='h'?overlap1D(a.x1,a.x2,d.x1,d.x2):overlap1D(a.y1,a.y2,d.y1,d.y2),ratio=ov/Math.max(1,Math.min(a.len,d.len));
-      if(ratio>=0.58&&ov>=minLen*.8){keep.add(i);keep.add(j);}
-    }
-  }
-  let selected=[...keep].map(i=>merged[i]);
-  // Remove dense repetitive fixture bands: many parallel lines with nearly identical spacing/length are usually gondolas, shelving, hatches or title blocks.
-  selected=selected.filter((s,idx,arr)=>{let neighbors=0;for(let j=0;j<arr.length;j++){if(j===idx||arr[j].axis!==s.axis)continue;const d=arr[j],parallelDist=s.axis==='h'?Math.abs(s.y1-d.y1):Math.abs(s.x1-d.x1);if(parallelDist>pairGap*2.2)continue;const lenRatio=Math.min(s.len,d.len)/Math.max(s.len,d.len);if(lenRatio>.82)neighbors++;}return neighbors<7||s.len>=veryLong*1.35;});
-  return dedupeSegments(selected,2.5);
-}
-
-async function extractAndDraw(modal){
-  if(!session.page)return;
-  const tolerance=Number(modal.querySelector('#pdfImportTolerance').value||5),mode=modal.querySelector('#pdfImportMode').value;
-  if(!session.rawSegments.length)session.rawSegments=await collectRawSegments();
-  const ortho=orthogonalize(session.rawSegments,2.5);
-  session.segments=mode==='structural'?structuralFilter(ortho,tolerance):dedupeSegments(mergeCollinear(ortho,2.5,5).filter(s=>s.len>=8),3);
-  drawOverlay(modal);
-  const crop=session.crop?` · recorte ${Math.round(session.crop.w)}×${Math.round(session.crop.h)} px`:' · página inteira';
-  modal.querySelector('#pdfImportStats').textContent=`${session.rawSegments.length} vetores no PDF · ${ortho.length} ortogonais no recorte · ${session.segments.length} ${mode==='structural'?'paredes prováveis':'linhas úteis'}${crop}.`;
-  modal.querySelector('#pdfImportDetect').disabled=false;modal.querySelector('#pdfImportApply').disabled=session.segments.length===0;
-}
-
-function dedupeSegments(items,eps){const out=[];for(const raw of items){const s=normalizeSegment(raw);if(out.some(o=>o.axis===s.axis&&Math.abs(o.x1-s.x1)<eps&&Math.abs(o.y1-s.y1)<eps&&Math.abs(o.x2-s.x2)<eps&&Math.abs(o.y2-s.y2)<eps))continue;out.push(s);}return out;}
-function drawOverlay(modal,dragging=false){const c=modal.querySelector('#pdfImportOverlay'),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);ctx.strokeStyle='rgba(124,231,211,.95)';ctx.lineWidth=1.8;for(const s of session.segments){ctx.beginPath();ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x2,s.y2);ctx.stroke();}if(session.crop){ctx.save();ctx.fillStyle='rgba(124,231,211,.07)';ctx.strokeStyle=dragging?'rgba(255,210,102,.95)':'rgba(255,210,102,.9)';ctx.lineWidth=2;ctx.setLineDash([7,5]);ctx.fillRect(session.crop.x,session.crop.y,session.crop.w,session.crop.h);ctx.strokeRect(session.crop.x,session.crop.y,session.crop.w,session.crop.h);ctx.restore();}}
-
-async function applyToPlan(modal){
-  const engine=await waitEngine(),p=engine.store.state.supermarket.plan||(engine.store.state.supermarket.plan={});if(!session.segments.length)return;
-  const b=session.crop||(()=>{const xs=session.segments.flatMap(s=>[s.x1,s.x2]),ys=session.segments.flatMap(s=>[s.y1,s.y2]);return{x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)}})();
-  const minX=b.x,maxX=b.x+b.w,minY=b.y,maxY=b.y+b.h,pxW=Math.max(1,maxX-minX),pxH=Math.max(1,maxY-minY);
-  const realW=Math.max(5,Number(modal.querySelector('#pdfImportWidthM').value||30)),realH=realW*(pxH/pxW),targetCell=Math.max(.25,Math.min(1.5,Math.max(realW,realH)/100));
-  const cols=Math.max(4,Math.min(160,Math.ceil(realW/targetCell))),rows=Math.max(4,Math.min(160,Math.ceil(realH/targetCell))),cellSize=Math.max(realW/cols,realH/rows),div=new Set();
-  for(const s of session.segments){const x1=(s.x1-minX)/pxW*realW,x2=(s.x2-minX)/pxW*realW,y1=(s.y1-minY)/pxH*realH,y2=(s.y2-minY)/pxH*realH;if(s.axis==='h'){const r=Math.max(0,Math.min(rows-1,Math.round(((y1+y2)/2)/cellSize))),ca=Math.max(0,Math.min(cols-1,Math.floor(Math.min(x1,x2)/cellSize))),cb=Math.max(0,Math.min(cols-1,Math.floor(Math.max(x1,x2)/cellSize)));for(let c=ca;c<=cb;c++)div.add(`${r},${c},h`);}else{const c=Math.max(0,Math.min(cols-1,Math.round(((x1+x2)/2)/cellSize))),ra=Math.max(0,Math.min(rows-1,Math.floor(Math.min(y1,y2)/cellSize))),rb=Math.max(0,Math.min(rows-1,Math.floor(Math.max(y1,y2)/cellSize)));for(let r=ra;r<=rb;r++)div.add(`${r},${c},v`);}}
-  p.cols=cols;p.rows=rows;p.cellSize=cellSize;p.targetArea=realW*realH;p.activeCells=[];p.dividers=[...div];p.showWalls=true;p.importedPdf={page:Number(modal.querySelector('#pdfImportPage').value||1),widthM:realW,heightM:realH,segments:session.segments.length,mode:modal.querySelector('#pdfImportMode').value,cropped:!!session.crop,importedAt:new Date().toISOString()};
-  engine.regenerateNow?.('supermarket.plan');engine.renderInspector?.('supermarket',engine.store.get('activeTool'));modal.querySelector('#pdfImportStats').textContent=`Importado: ${realW.toFixed(1)} × ${realH.toFixed(1)} m · ${cols} × ${rows} células · ${session.segments.length} paredes vetoriais convertidas.`;
-}
-
+function makeButton(){if(document.querySelector('#pdfPlanImportBtn'))return;const panel=document.querySelector('#panelContent');if(!panel||window.enginePerson?.store?.get('mode')!=='supermarket')return;const section=document.createElement('section');section.className='section';section.id='pdfPlanImportSection';section.innerHTML='<h3>Importar planta</h3><p class="warehouse-dimension-hint">Importação sem IA com leitura semântica de códigos repetidos do projeto. Paredes, gôndolas e checkouts são separados em camadas antes de gerar o 3D.</p>';const btn=document.createElement('button');btn.id='pdfPlanImportBtn';btn.type='button';btn.className='primary';btn.textContent='Importar planta PDF';btn.onclick=openImporter;section.appendChild(btn);panel.prepend(section);}
+function modalShell(){document.querySelector('#pdfPlanImporterModal')?.remove();const overlay=document.createElement('div');overlay.id='pdfPlanImporterModal';overlay.className='pdf-import-overlay';overlay.innerHTML=`<div class="pdf-import-modal"><aside class="pdf-import-side"><div class="eyebrow">IMPORTADOR SEMÂNTICO</div><h2>PDF → Loja 2D/3D</h2><p class="warehouse-dimension-hint">Selecione a planta. O sistema usa geometria + textos/códigos do próprio desenho para separar estrutura e equipamentos. Depois revise pelas camadas coloridas.</p><label class="pdf-import-label">Arquivo PDF<input id="pdfImportFile" type="file" accept="application/pdf"></label><label class="pdf-import-label">Página<select id="pdfImportPage"><option value="1">1</option></select></label><label class="pdf-import-label">Largura real da área selecionada (m)<input id="pdfImportWidthM" type="number" min="5" max="1000" step="0.5" value="30"></label><div class="pdf-import-tools"><button id="pdfToolCrop" class="warehouse-toggle-btn active">Selecionar área</button><button id="pdfToolClassify" class="warehouse-toggle-btn">Reclassificar</button></div><div class="pdf-import-layerbox"><b>Camadas detectadas</b><label><input type="checkbox" data-layer="wall" checked> Paredes</label><label><input type="checkbox" data-layer="gondola" checked> Gôndolas / expositores</label><label><input type="checkbox" data-layer="checkout" checked> Checkouts / PDV</label><label><input type="checkbox" data-layer="promo" checked> Outros equipamentos</label></div><label class="pdf-import-label">Categoria ao clicar<select id="pdfClassTarget"><option value="gondola">Gôndola</option><option value="checkout">Checkout / PDV</option><option value="promo">Equipamento / DPV</option><option value="wall">Parede</option><option value="ignore">Ignorar</option></select></label><div class="pdf-import-stats" id="pdfImportStats">Selecione um PDF.</div><button id="pdfImportResetCrop" class="ghost-btn" disabled>Limpar seleção</button><button id="pdfImportDetect" class="ghost-btn" disabled>Reprocessar classificação</button><button id="pdfImportApply" class="primary" disabled>Substituir loja pelo PDF</button><button id="pdfImportClose" class="ghost-btn">Fechar</button></aside><main class="pdf-import-preview"><div class="pdf-import-toolbar"><span>Prévia semântica — azul gôndola · laranja checkout · verde parede</span><span id="pdfImportPageInfo"></span></div><div class="pdf-import-canvas-wrap"><canvas id="pdfImportCanvas"></canvas><canvas id="pdfImportOverlay"></canvas></div></main></div>`;document.body.appendChild(overlay);overlay.querySelector('#pdfImportClose').onclick=()=>overlay.remove();overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});return overlay;}
+let session={pdf:null,page:null,viewport:null,pdfjs:null,crop:null,dragStart:null,tool:'crop',rawSegments:[],texts:[],walls:[],fixtures:[],manual:[]};
+async function openImporter(){const modal=modalShell(),file=modal.querySelector('#pdfImportFile'),page=modal.querySelector('#pdfImportPage');file.onchange=async()=>{if(file.files?.[0])await loadPdf(file.files[0],modal);};page.onchange=()=>loadPage(Number(page.value),modal);modal.querySelector('#pdfImportDetect').onclick=()=>classify(modal);modal.querySelector('#pdfImportApply').onclick=()=>applyToPlan(modal);modal.querySelector('#pdfImportResetCrop').onclick=()=>{session.crop=null;session.manual=[];classify(modal);};modal.querySelector('#pdfToolCrop').onclick=()=>setTool(modal,'crop');modal.querySelector('#pdfToolClassify').onclick=()=>setTool(modal,'classify');modal.querySelectorAll('[data-layer]').forEach(x=>x.onchange=()=>drawOverlay(modal));installInteraction(modal);}
+function setTool(modal,tool){session.tool=tool;modal.querySelector('#pdfToolCrop').classList.toggle('active',tool==='crop');modal.querySelector('#pdfToolClassify').classList.toggle('active',tool==='classify');modal.querySelector('#pdfImportOverlay').style.cursor=tool==='crop'?'crosshair':'pointer';}
+function installInteraction(modal){const c=modal.querySelector('#pdfImportOverlay'),pos=e=>{const r=c.getBoundingClientRect();return{x:(e.clientX-r.left)*(c.width/r.width),y:(e.clientY-r.top)*(c.height/r.height)};};c.onpointerdown=e=>{if(!session.page)return;const p=pos(e);if(session.tool==='classify'){reclassifyAt(p,modal);return;}session.dragStart=p;c.setPointerCapture(e.pointerId);};c.onpointermove=e=>{if(session.tool!=='crop'||!session.dragStart)return;const p=pos(e),a=session.dragStart;session.crop={x:Math.min(a.x,p.x),y:Math.min(a.y,p.y),w:Math.abs(p.x-a.x),h:Math.abs(p.y-a.y)};drawOverlay(modal,true);};c.onpointerup=()=>{if(session.tool!=='crop'||!session.dragStart)return;session.dragStart=null;if(session.crop?.w<25||session.crop?.h<25)session.crop=null;modal.querySelector('#pdfImportResetCrop').disabled=!session.crop;classify(modal);};}
+async function loadPdf(file,modal){const stats=modal.querySelector('#pdfImportStats');stats.textContent='Carregando PDF…';try{const pdfjs=await import(PDFJS_URL);pdfjs.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;session.pdfjs=pdfjs;session.pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;const sel=modal.querySelector('#pdfImportPage');sel.innerHTML='';for(let i=1;i<=session.pdf.numPages;i++){const o=document.createElement('option');o.value=i;o.textContent=i;sel.appendChild(o);}await loadPage(1,modal);}catch(err){stats.textContent=`Falha ao abrir PDF: ${err.message}`;}}
+async function loadPage(n,modal){session.page=await session.pdf.getPage(n);session.crop=null;session.rawSegments=[];session.texts=[];session.manual=[];const base=session.page.getViewport({scale:1}),scale=Math.min(2.2,1200/base.width,780/base.height),v=session.page.getViewport({scale});session.viewport=v;const canvas=modal.querySelector('#pdfImportCanvas'),ctx=canvas.getContext('2d');canvas.width=Math.ceil(v.width);canvas.height=Math.ceil(v.height);await session.page.render({canvasContext:ctx,viewport:v}).promise;const overlay=modal.querySelector('#pdfImportOverlay');overlay.width=canvas.width;overlay.height=canvas.height;modal.querySelector('#pdfImportPageInfo').textContent=`página ${n}/${session.pdf.numPages}`;await collectData();await classify(modal);}
+async function collectData(){const page=session.page,pdfjs=session.pdfjs,v=session.viewport,op=await page.getOperatorList(),raw=[];let cx=0,cy=0;for(let i=0;i<op.fnArray.length;i++){if(op.fnArray[i]!==pdfjs.OPS.constructPath)continue;const args=op.argsArray[i]||[],ops=args[0]||[],pts=args[1]||[];let pi=0;for(const code of ops){if(code===pdfjs.OPS.moveTo){cx=pts[pi++];cy=pts[pi++];}else if(code===pdfjs.OPS.lineTo){const nx=pts[pi++],ny=pts[pi++],a=v.convertToViewportPoint(cx,cy),b=v.convertToViewportPoint(nx,ny);raw.push({x1:a[0],y1:a[1],x2:b[0],y2:b[1]});cx=nx;cy=ny;}else if(code===pdfjs.OPS.rectangle){const x=pts[pi++],y=pts[pi++],w=pts[pi++],h=pts[pi++],p=[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];for(let k=0;k<4;k++){const a=v.convertToViewportPoint(...p[k]),b=v.convertToViewportPoint(...p[k+1]);raw.push({x1:a[0],y1:a[1],x2:b[0],y2:b[1]});}}else pi+=code===pdfjs.OPS.curveTo?6:(code===pdfjs.OPS.curveTo2||code===pdfjs.OPS.curveTo3?4:0);}}session.rawSegments=raw;const tc=await page.getTextContent(),texts=[];for(const item of tc.items||[]){if(!item.str?.trim())continue;const t=pdfjs.Util.transform(v.transform,item.transform),x=t[4],y=t[5],h=Math.max(4,Math.hypot(t[2],t[3])||8),w=Math.max(4,(item.width||item.str.length*4)*(v.scale||1));texts.push({text:item.str.trim(),x,y,w,h});}session.texts=texts;}
+function crop(){return session.crop||{x:0,y:0,w:session.viewport?.width||1,h:session.viewport?.height||1};}
+function insidePoint(x,y){const c=crop();return x>=c.x&&x<=c.x+c.w&&y>=c.y&&y<=c.y+c.h;}
+function orthoSegments(){const out=[];for(const s of session.rawSegments){const mx=(s.x1+s.x2)/2,my=(s.y1+s.y2)/2;if(!insidePoint(mx,my))continue;const dx=s.x2-s.x1,dy=s.y2-s.y1,len=Math.hypot(dx,dy);if(len<7)continue;if(Math.abs(dy)<2.8)out.push({x1:Math.min(s.x1,s.x2),x2:Math.max(s.x1,s.x2),y1:(s.y1+s.y2)/2,y2:(s.y1+s.y2)/2,axis:'h',len:Math.abs(dx),type:'wall'});else if(Math.abs(dx)<2.8)out.push({x1:(s.x1+s.x2)/2,x2:(s.x1+s.x2)/2,y1:Math.min(s.y1,s.y2),y2:Math.max(s.y1,s.y2),axis:'v',len:Math.abs(dy),type:'wall'});}return out;}
+function mergeCollinear(items){const a=[...items].sort((x,y)=>x.axis.localeCompare(y.axis)||(x.axis==='h'?x.y1-y.y1:x.x1-y.x1)||(x.axis==='h'?x.x1-y.x1:x.y1-y.y1)),out=[];for(const s of a){const l=out.at(-1);if(l&&l.axis===s.axis){if(s.axis==='h'&&Math.abs(l.y1-s.y1)<2.5&&s.x1<=l.x2+5){l.x2=Math.max(l.x2,s.x2);l.len=l.x2-l.x1;continue;}if(s.axis==='v'&&Math.abs(l.x1-s.x1)<2.5&&s.y1<=l.y2+5){l.y2=Math.max(l.y2,s.y2);l.len=l.y2-l.y1;continue;}}out.push({...s});}return out;}
+function fixtureLabels(){const g=[],ck=[],promo=[];for(const t of session.texts){if(!insidePoint(t.x,t.y))continue;const s=t.text.toUpperCase().replace(/\s+/g,'');if(/^(?:G[A-Z]?|PB|D)\.?\d+(?:LP|P)/.test(s))g.push(t);else if(/^CK\.?\d*/.test(s)||/CHECKOUT|CAIXA|PDV/.test(s))ck.push(t);else if(/EXPOSITOR|DISPLAY|DPV|BANCADA/.test(s))promo.push(t);}return{g,ck,promo};}
+function clusterGondolas(points){const used=new Set(),res=[];const tryAxis=(axis)=>{const coord=axis==='v'?'x':'y',along=axis==='v'?'y':'x',sorted=[...points].map((p,i)=>({...p,i})).sort((a,b)=>a[coord]-b[coord]),groups=[];for(const p of sorted){let g=groups.find(q=>Math.abs(q.mean-p[coord])<8);if(!g){g={mean:p[coord],pts:[]};groups.push(g);}g.pts.push(p);g.mean=g.pts.reduce((s,x)=>s+x[coord],0)/g.pts.length;}for(const g of groups){const pts=g.pts.filter(p=>!used.has(p.i));if(pts.length<2)continue;const min=Math.min(...pts.map(p=>p[along])),max=Math.max(...pts.map(p=>p[along]));if(max-min<24)continue;pts.forEach(p=>used.add(p.i));const pad=12;if(axis==='v')res.push({id:`imp-g-${res.length}`,type:'gondola',x:g.mean,y:(min+max)/2,w:18,h:max-min+pad,rotation:Math.PI/2,modules:Math.max(1,pts.length)});else res.push({id:`imp-g-${res.length}`,type:'gondola',x:(min+max)/2,y:g.mean,w:max-min+pad,h:18,rotation:0,modules:Math.max(1,pts.length)});}};tryAxis('v');tryAxis('h');return res;}
+function clusterPoints(points,type){const out=[];for(const p of points){let o=out.find(q=>Math.hypot(q.x-p.x,q.y-p.y)<18);if(o){o.x=(o.x*o.count+p.x)/(o.count+1);o.y=(o.y*o.count+p.y)/(o.count+1);o.count++;}else out.push({id:`imp-${type}-${out.length}`,type,x:p.x,y:p.y,w:type==='checkout'?28:24,h:type==='checkout'?18:18,rotation:0,count:1});}return out;}
+function structuralWalls(fixtures){const seg=mergeCollinear(orthoSegments()),c=crop(),diag=Math.hypot(c.w,c.h),minLen=diag*.035,long=diag*.12;const nearFixture=s=>fixtures.some(f=>{const mx=(s.x1+s.x2)/2,my=(s.y1+s.y2)/2;return mx>f.x-f.w/2-12&&mx<f.x+f.w/2+12&&my>f.y-f.h/2-12&&my<f.y+f.h/2+12;});const keep=[];for(let i=0;i<seg.length;i++){const s=seg[i];if(s.len<minLen||nearFixture(s))continue;let paired=false;for(let j=0;j<seg.length;j++){if(i===j||seg[j].axis!==s.axis)continue;const d=seg[j],gap=s.axis==='h'?Math.abs(s.y1-d.y1):Math.abs(s.x1-d.x1);if(gap<2||gap>14)continue;const ov=s.axis==='h'?Math.max(0,Math.min(s.x2,d.x2)-Math.max(s.x1,d.x1)):Math.max(0,Math.min(s.y2,d.y2)-Math.max(s.y1,d.y1));if(ov>Math.min(s.len,d.len)*.55){paired=true;break;}}if(s.len>=long||paired)keep.push(s);}return keep.filter((s,i,a)=>{let neighbors=0;for(const d of a){if(d===s||d.axis!==s.axis)continue;const dist=s.axis==='h'?Math.abs(s.y1-d.y1):Math.abs(s.x1-d.x1);if(dist<22&&Math.min(s.len,d.len)/Math.max(s.len,d.len)>.85)neighbors++;}return neighbors<6||s.len>long*1.4;});}
+async function classify(modal){if(!session.page)return;const labels=fixtureLabels(),g=clusterGondolas(labels.g),ck=clusterPoints(labels.ck,'checkout'),pr=clusterPoints(labels.promo,'promo'),fixtures=[...g,...ck,...pr];session.fixtures=fixtures;session.walls=structuralWalls(fixtures);drawOverlay(modal);const counts={g:g.length,c:ck.length,p:pr.length,w:session.walls.length};modal.querySelector('#pdfImportStats').innerHTML=`Detectado: <b>${counts.w}</b> paredes · <b>${counts.g}</b> gôndolas · <b>${counts.c}</b> checkouts/PDV · <b>${counts.p}</b> outros. Clique em <b>Reclassificar</b> para corrigir manualmente antes do 3D.`;modal.querySelector('#pdfImportDetect').disabled=false;modal.querySelector('#pdfImportApply').disabled=!session.crop;}
+function visible(modal,type){return modal.querySelector(`[data-layer="${type}"]`)?.checked!==false;}
+function drawOverlay(modal,dragging=false){const c=modal.querySelector('#pdfImportOverlay'),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);if(visible(modal,'wall')){ctx.strokeStyle=COLORS.wall;ctx.lineWidth=2;for(const s of session.walls){ctx.beginPath();ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x2,s.y2);ctx.stroke();}}for(const f of session.fixtures){if(!visible(modal,f.type))continue;ctx.save();ctx.strokeStyle=COLORS[f.type]||COLORS.promo;ctx.fillStyle=(COLORS[f.type]||COLORS.promo)+'33';ctx.lineWidth=2;ctx.translate(f.x,f.y);ctx.rotate(f.rotation||0);ctx.fillRect(-f.w/2,-f.h/2,f.w,f.h);ctx.strokeRect(-f.w/2,-f.h/2,f.w,f.h);ctx.restore();}if(session.crop){ctx.save();ctx.strokeStyle=dragging?'#ffd266':'#ffd266';ctx.lineWidth=2;ctx.setLineDash([7,5]);ctx.strokeRect(session.crop.x,session.crop.y,session.crop.w,session.crop.h);ctx.restore();}}
+function reclassifyAt(p,modal){const target=modal.querySelector('#pdfClassTarget').value;let best=null,bestD=18;for(const f of session.fixtures){const d=Math.hypot(f.x-p.x,f.y-p.y);if(d<Math.max(bestD,Math.max(f.w,f.h)/2)){best=f;bestD=d;}}if(best){if(target==='ignore'){session.fixtures=session.fixtures.filter(x=>x!==best);}else{best.type=target;if(target==='checkout'){best.w=28;best.h=18;}if(target==='promo'){best.w=24;best.h=18;}}drawOverlay(modal);return;}let wall=null,wd=10;for(const s of session.walls){const d=distanceToSegment(p,s);if(d<wd){wd=d;wall=s;}}if(wall){if(target==='ignore')session.walls=session.walls.filter(x=>x!==wall);else if(target!=='wall'){const x=(wall.x1+wall.x2)/2,y=(wall.y1+wall.y2)/2,w=Math.max(20,Math.abs(wall.x2-wall.x1)),h=Math.max(18,Math.abs(wall.y2-wall.y1));session.walls=session.walls.filter(x=>x!==wall);session.fixtures.push({id:`manual-${Date.now()}`,type:target,x,y,w,h,rotation:wall.axis==='v'?Math.PI/2:0,modules:Math.max(1,Math.round(Math.max(w,h)/22))});}drawOverlay(modal);}}
+function distanceToSegment(p,s){const x1=s.x1,y1=s.y1,x2=s.x2,y2=s.y2,A=p.x-x1,B=p.y-y1,C=x2-x1,D=y2-y1,d=C*C+D*D||1,t=Math.max(0,Math.min(1,(A*C+B*D)/d)),x=x1+t*C,y=y1+t*D;return Math.hypot(p.x-x,p.y-y);}
+async function applyToPlan(modal){const engine=await waitEngine(),c=engine.store.state.supermarket,p=c.plan||(c.plan={}),b=crop(),realW=Math.max(5,Number(modal.querySelector('#pdfImportWidthM').value||30)),realH=realW*(b.h/b.w),cell=Math.max(.25,Math.min(1,Math.max(realW,realH)/120)),cols=Math.max(4,Math.min(180,Math.ceil(realW/cell))),rows=Math.max(4,Math.min(180,Math.ceil(realH/cell))),cellSize=Math.max(realW/cols,realH/rows),toWorld=(x,y)=>({x:(x-b.x)/b.w*realW-realW/2,z:(y-b.y)/b.h*realH-realH/2}),div=new Set();for(const s of session.walls){if(!visible(modal,'wall'))continue;const a=toWorld(s.x1,s.y1),d=toWorld(s.x2,s.y2);if(s.axis==='h'){const r=Math.max(0,Math.min(rows-1,Math.round((a.z+realH/2)/cellSize)));const ca=Math.max(0,Math.min(cols-1,Math.floor((Math.min(a.x,d.x)+realW/2)/cellSize))),cb=Math.max(0,Math.min(cols-1,Math.floor((Math.max(a.x,d.x)+realW/2)/cellSize)));for(let cc=ca;cc<=cb;cc++)div.add(`${r},${cc},h`);}else{const cc=Math.max(0,Math.min(cols-1,Math.round((a.x+realW/2)/cellSize)));const ra=Math.max(0,Math.min(rows-1,Math.floor((Math.min(a.z,d.z)+realH/2)/cellSize))),rb=Math.max(0,Math.min(rows-1,Math.floor((Math.max(a.z,d.z)+realH/2)/cellSize)));for(let rr=ra;rr<=rb;rr++)div.add(`${rr},${cc},v`);}}const sx=realW/b.w,sz=realH/b.h,objects=[];for(const f of session.fixtures){if(!visible(modal,f.type)||f.type==='ignore'||f.type==='wall')continue;const q=toWorld(f.x,f.y),ww=Math.max(.55,f.w*sx),dd=Math.max(.45,f.h*sz);objects.push({id:f.id,type:f.type,x:q.x,z:q.z,rotation:f.rotation||0,width:ww,depth:dd,modules:f.type==='gondola'?Math.max(1,Math.round(ww/Math.max(.7,c.moduleWidth||1))):undefined,endcaps:f.type==='gondola'?false:undefined});}p.cols=cols;p.rows=rows;p.cellSize=cellSize;p.targetArea=realW*realH;p.activeCells=[];p.dividers=[...div];p.showWalls=true;p.objectPlacements={};p.importedMode=true;p.importedObjects=objects;p.importedPdf={page:Number(modal.querySelector('#pdfImportPage').value||1),widthM:realW,heightM:realH,walls:session.walls.length,objects:objects.length,importedAt:new Date().toISOString()};c.gondolaRows=0;c.wallGondolas=false;c.promoTables=0;c.checkouts=0;engine.regenerateNow?.('supermarket.plan');engine.renderInspector?.('supermarket',engine.store.get('activeTool'));modal.querySelector('#pdfImportStats').innerHTML=`3D substituído pelo PDF: <b>${objects.filter(x=>x.type==='gondola').length}</b> gôndolas · <b>${objects.filter(x=>x.type==='checkout').length}</b> checkouts · <b>${div.size}</b> segmentos estruturais. Os objetos procedurais anteriores foram removidos.`;}
 const observer=new MutationObserver(()=>makeButton());observer.observe(document.body,{subtree:true,childList:true});waitEngine().then(()=>makeButton());
