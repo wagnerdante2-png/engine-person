@@ -36,6 +36,8 @@ export class SceneRuntime {
   frame(mode='human'){
     if(mode==='city'){
       this.camera.position.set(12,11,15);this.controls.target.set(0,1.2,0);this.controls.maxDistance=90;this.scene.fog.density=.016;
+    }else if(mode==='warehouse'){
+      this.camera.position.set(15,10.5,18);this.controls.target.set(0,2.1,0);this.controls.maxDistance=110;this.scene.fog.density=.011;
     }else{
       this.camera.position.set(3.1,1.95,4.2);this.controls.target.set(0,.92,0);this.controls.maxDistance=14;this.scene.fog.density=.020;
     }
