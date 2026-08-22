@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 20,
+  version: 21,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
@@ -71,7 +71,19 @@ export const defaultState = {
     wallGondolas: true,
     productFill: .82,
     promoTables: 2,
-    checkouts: 4
+    checkouts: 4,
+    plan: {
+      cols: 16,
+      rows: 12,
+      cellSize: 1.5,
+      targetArea: 432,
+      showWalls: true,
+      wallHeight: 2.8,
+      wallThickness: .12,
+      activeCells: [],
+      dividers: [],
+      sectors: []
+    }
   },
   castle: {
     seed: 731942,
