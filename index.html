@@ -28,7 +28,6 @@
         <label class="ghost-btn file-button">Abrir<input id="openProject" type="file" accept="application/json" /></label>
       </div>
     </header>
-
     <aside class="leftbar glass">
       <div class="tool-section-title">Biblioteca</div>
       <button class="tool-button active" data-tool="shape"><span>◈</span><small>Forma</small></button>
@@ -40,22 +39,19 @@
       <div class="leftbar-spacer"></div>
       <button class="tool-button" data-tool="environment"><span>◇</span><small>Ambiente</small></button>
     </aside>
-
     <main id="viewportWrap">
       <canvas id="viewport"></canvas>
       <div class="viewport-gradient"></div>
       <div class="viewport-info glass"><div><span class="status-dot"></span><span id="modeLabel">PERSON DESIGN</span></div><div class="seed-readout">SEED <strong id="seedLabel">000000</strong></div></div>
       <div class="camera-hints glass">Arraste: orbitar · Scroll: zoom · Botão direito: mover</div>
     </main>
-
     <aside id="inspector" class="inspector glass">
       <div class="inspector-head"><div><span class="eyebrow">EDITOR</span><h2 id="panelTitle">Corpo</h2></div><button id="collapseInspector" class="icon-btn">〉</button></div>
       <div id="panelContent" class="panel-content"></div>
     </aside>
-
     <footer class="statusbar glass"><div id="objectStats">Pronto</div><div class="status-actions"><button id="resetCameraBtn">Enquadrar</button><button id="toggleGridBtn">Grade</button><button id="toggleAutoRotateBtn">Auto-rotação</button></div></footer>
   </div>
-  <script type="module" src="./src/main.js"></script>
-  <script type="module" src="./src/ui/pdf-plan-importer-v2.js"></script>
+  <script type="module" src="./src/main.js?v=20260822-3"></script>
+  <script type="module" src="./src/ui/pdf-plan-importer-v2.js?v=20260822-semantic-3"></script>
 </body>
 </html>
