@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 18,
+  version: 19,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
@@ -56,6 +56,23 @@ export const defaultState = {
     showForklifts: true,
     showPositionLabels: true
   },
+  supermarket: {
+    seed: 246810,
+    gondolaRows: 5,
+    modules: 8,
+    shelves: 5,
+    moduleWidth: 1.00,
+    depth: .78,
+    height: 1.80,
+    aisleWidth: 1.75,
+    doubleSided: true,
+    backPanel: true,
+    endcaps: true,
+    wallGondolas: true,
+    productFill: .82,
+    promoTables: 2,
+    checkouts: 4
+  },
   environment: { timeOfDay: 15.6, exposure: 1.18, ground: '#151a22', autoRotate: false, grid: true }
 };
 
@@ -80,6 +97,7 @@ export class Store extends EventTarget {
     const seed = Math.floor(Math.random() * 900000) + 100000;
     if (target === 'city') this.set('city.seed', seed);
     else if (target === 'warehouse') this.set('warehouse.seed', seed);
+    else if (target === 'supermarket') this.set('supermarket.seed', seed);
     else { this.set('seed', seed); this.set('human.seed', seed, true); }
     return seed;
   }
