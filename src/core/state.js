@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 15,
+  version: 16,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
@@ -46,6 +46,7 @@ export const defaultState = {
     rows: 5,
     bays: 7,
     levels: 4,
+    rackType: 'unitary',
     bayWidth: 1.55,
     rackDepth: 1.08,
     levelHeight: 1.05,
