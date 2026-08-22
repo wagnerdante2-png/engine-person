@@ -13,61 +13,51 @@ const BOXES=['#b98a58','#8f6a48','#c49a6c','#a9794f','#d1aa78','#7d644e'];
 
 function box(w,h,d,material,x,y,z){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;return mesh;}
 
-function roundedRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
+function createPositionMarker(text,occupied=true){
+  const group=new THREE.Group();
+  group.userData.positionCode=text;
+  group.userData.isPositionLabel=true;
+  group.userData.phase=(parseInt(text.replace(/\D/g,''),10)||0)*.29;
 
-function createPositionLabel(text,occupied=true){
   const canvas=document.createElement('canvas');
-  canvas.width=320; canvas.height=112;
+  canvas.width=192; canvas.height=72;
   const ctx=canvas.getContext('2d');
   ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  const glow=occupied?'rgba(90,229,255,.36)':'rgba(130,155,175,.20)';
-  const edge=occupied?'rgba(93,225,255,.82)':'rgba(124,151,171,.58)';
-  const textColor=occupied?'#c9f7ff':'#b8c7d4';
-
-  ctx.shadowColor=glow; ctx.shadowBlur=14;
-  roundedRect(ctx,10,10,300,92,14);
-  ctx.fillStyle='rgba(6,16,25,.94)'; ctx.fill();
-  ctx.shadowBlur=0;
-  ctx.lineWidth=2; ctx.strokeStyle=edge; ctx.stroke();
-
-  ctx.fillStyle='rgba(255,255,255,.03)';
-  roundedRect(ctx,18,18,284,76,10); ctx.fill();
-
-  ctx.lineWidth=1.4; ctx.strokeStyle=occupied?'rgba(89,221,255,.34)':'rgba(135,160,179,.18)';
-  ctx.beginPath();
-  ctx.moveTo(26,76); ctx.lineTo(54,76); ctx.lineTo(71,57); ctx.lineTo(92,57);
-  ctx.moveTo(228,56); ctx.lineTo(247,56); ctx.lineTo(262,38); ctx.lineTo(292,38);
-  ctx.moveTo(228,77); ctx.lineTo(260,77); ctx.lineTo(275,63); ctx.lineTo(294,63);
-  ctx.stroke();
-
-  const nodes=[[54,76],[71,57],[247,56],[262,38],[260,77],[275,63]];
-  ctx.fillStyle=occupied?'rgba(112,235,255,.88)':'rgba(150,171,188,.45)';
-  for(const [x,y] of nodes){ctx.beginPath();ctx.arc(x,y,2.7,0,Math.PI*2);ctx.fill();}
-
-  ctx.font='600 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-  ctx.fillStyle=occupied?'rgba(117,231,250,.66)':'rgba(158,177,191,.50)';
-  ctx.textAlign='left'; ctx.textBaseline='middle';
-  ctx.fillText('NODE',26,34);
-  ctx.textAlign='right'; ctx.fillText(occupied?'LIVE':'IDLE',294,88);
-
-  ctx.shadowColor=occupied?'rgba(87,231,255,.55)':'transparent'; ctx.shadowBlur=8;
-  ctx.fillStyle=textColor;
-  ctx.font='700 42px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.font='700 36px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(text,160,58);
-  ctx.shadowBlur=0;
+  ctx.shadowColor=occupied?'rgba(92,231,255,.45)':'rgba(150,170,188,.20)';
+  ctx.shadowBlur=7;
+  ctx.fillStyle=occupied?'rgba(202,248,255,.96)':'rgba(190,205,216,.82)';
+  ctx.fillText(text,96,36);
 
   const texture=new THREE.CanvasTexture(canvas);
-  texture.colorSpace=THREE.SRGBColorSpace; texture.generateMipmaps=false; texture.minFilter=THREE.LinearFilter;
-  const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:true,depthWrite:false,opacity:.92});
-  const sprite=new THREE.Sprite(material);
-  sprite.scale.set(.66,.235,1); sprite.renderOrder=4;
-  sprite.userData.positionCode=text;
-  sprite.userData.baseOpacity=occupied?.92:.78;
-  sprite.userData.phase=(parseInt(text.replace(/\D/g,''),10)||0)*.37;
-  sprite.userData.isPositionLabel=true;
-  return sprite;
+  texture.colorSpace=THREE.SRGBColorSpace;
+  texture.generateMipmaps=false;
+  texture.minFilter=THREE.LinearFilter;
+  const numberMaterial=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:true,depthWrite:false,opacity:occupied?.95:.78});
+  const number=new THREE.Sprite(numberMaterial);
+  number.scale.set(.34,.13,1);
+  number.position.set(.22,0,0);
+  number.renderOrder=5;
+  number.userData.baseOpacity=occupied?.95:.78;
+  group.add(number);
+
+  const lineMaterial=new THREE.LineBasicMaterial({color:occupied?0x6fe9ff:0x79909f,transparent:true,opacity:occupied?.62:.32,depthWrite:false});
+  const points=[new THREE.Vector3(-.30,0,0),new THREE.Vector3(-.15,0,0),new THREE.Vector3(-.07,.055,0),new THREE.Vector3(.01,.055,0)];
+  const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),lineMaterial);
+  line.renderOrder=4;
+  group.add(line);
+
+  const nodeMat=new THREE.MeshBasicMaterial({color:occupied?0x80efff:0x8193a0,transparent:true,opacity:occupied?.72:.40,depthWrite:false});
+  const nodeGeo=new THREE.SphereGeometry(.018,10,10);
+  const nodeA=new THREE.Mesh(nodeGeo,nodeMat.clone()); nodeA.position.set(-.15,0,0);
+  const nodeB=new THREE.Mesh(nodeGeo,nodeMat.clone()); nodeB.position.set(-.07,.055,0);
+  const nodeC=new THREE.Mesh(nodeGeo,nodeMat.clone()); nodeC.position.set(.01,.055,0);
+  group.add(nodeA,nodeB,nodeC);
+  group.userData.line=line;
+  group.userData.nodes=[nodeA,nodeB,nodeC];
+  group.userData.number=number;
+  return group;
 }
 
 function createPallet(rand,width,depth,loadHeight,fill){const g=new THREE.Group();const wood=mat(WOOD,.96),darkWood=mat('#654326',.98);const deckH=.07,palletH=.15;for(let i=-1;i<=1;i++)g.add(box(width*.94,deckH,depth*.16,wood,0,.11,i*depth*.31));for(let i=-1;i<=1;i++)g.add(box(width*.15,.09,depth*.88,darkWood,i*width*.33,.045,0));if(rand()>fill){g.userData.empty=true;return g;}const layers=Math.max(1,Math.floor(2+rand()*4));const cols=rand()<.6?3:2,rows=rand()<.55?2:1;const gap=.025,usableW=width*.88,usableD=depth*.86;const bw=(usableW-gap*(cols-1))/cols,bd=(usableD-gap*(rows-1))/rows;const bh=Math.max(.13,(loadHeight-palletH)/layers*.90);for(let l=0;l<layers;l++)for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){if(rand()<.08)continue;const material=mat(BOXES[Math.floor(rand()*BOXES.length)],.92);const px=-usableW/2+bw/2+c*(bw+gap),pz=-usableD/2+bd/2+r*(bd+gap);g.add(box(bw*.96,bh,bd*.96,material,px,palletH+bh/2+l*bh,pz));}g.userData.empty=false;return g;}
@@ -106,10 +96,10 @@ function createRackRow(config,rowIndex,positionStart=1){
         pallet.userData.address={rack:rowIndex+1,bay:b+1,level:l+1,slot:slot<0?1:2};
         g.add(pallet);
         if(config.showPositionLabels!==false){
-          const label=createPositionLabel(code,!pallet.userData.empty);
-          label.position.set(px,shelfY+.28,rackDepth/2+.085);
-          label.userData.address=pallet.userData.address;
-          g.add(label);
+          const marker=createPositionMarker(code,!pallet.userData.empty);
+          marker.position.set(px,shelfY+.27,rackDepth/2+.09);
+          marker.userData.address=pallet.userData.address;
+          g.add(marker);
         }
         positionCodes.push(code);
         palletCount++; if(!pallet.userData.empty)occupied++;
@@ -166,15 +156,16 @@ export function generateWarehouse(c){
   }
 
   const animatedLabels=[];
-  if(c.showPositionLabels!==false){
-    root.traverse(obj=>{if(obj.userData?.isPositionLabel)animatedLabels.push(obj);});
-  }
+  if(c.showPositionLabels!==false){root.traverse(obj=>{if(obj.userData?.isPositionLabel)animatedLabels.push(obj);});}
   root.userData.update=(elapsed)=>{
-    for(const label of animatedLabels){
-      const base=label.userData.baseOpacity??.88;
-      label.material.opacity=THREE.MathUtils.clamp(base+Math.sin(elapsed*1.35+(label.userData.phase??0))*.035,.62,.98);
+    for(const marker of animatedLabels){
+      const pulse=.88+Math.sin(elapsed*1.4+(marker.userData.phase??0))*.08;
+      const number=marker.userData.number;
+      if(number?.material)number.material.opacity=(number.userData.baseOpacity??.9)*pulse;
+      if(marker.userData.line?.material)marker.userData.line.material.opacity*=1;
+      for(const node of marker.userData.nodes??[])if(node.material)node.material.opacity=Math.max(.30,Math.min(.82,node.material.opacity*(.98+Math.sin(elapsed*1.7+(marker.userData.phase??0))*.02)));
     }
   };
-  root.userData.stats={mode:'procedural-warehouse-v5',rackType,requestedRows,rows,physicalRackRows,bays,levels,rackModules:physicalRackRows*bays,palletPositions,occupiedPositions,numberedPositions:palletPositions,positionLabelsVisible:c.showPositionLabels!==false,occupancy:palletPositions?occupiedPositions/palletPositions:0,aisles:Math.max(1,aisleCenters.length),forklifts:forkliftCount,width,depth};
+  root.userData.stats={mode:'procedural-warehouse-v6',rackType,requestedRows,rows,physicalRackRows,bays,levels,rackModules:physicalRackRows*bays,palletPositions,occupiedPositions,numberedPositions:palletPositions,positionLabelsVisible:c.showPositionLabels!==false,occupancy:palletPositions?occupiedPositions/palletPositions:0,aisles:Math.max(1,aisleCenters.length),forklifts:forkliftCount,width,depth};
   return root;
 }
