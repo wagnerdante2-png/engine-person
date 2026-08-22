@@ -13,9 +13,70 @@ const BOXES=['#b98a58','#8f6a48','#c49a6c','#a9794f','#d1aa78','#7d644e'];
 
 function box(w,h,d,material,x,y,z){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;return mesh;}
 
+function createPositionLabel(text,occupied=true){
+  const canvas=document.createElement('canvas');
+  canvas.width=256; canvas.height=96;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle=occupied?'rgba(238,244,250,.96)':'rgba(196,207,219,.90)';
+  ctx.fillRect(8,8,240,80);
+  ctx.strokeStyle='rgba(21,95,181,.95)'; ctx.lineWidth=6; ctx.strokeRect(8,8,240,80);
+  ctx.fillStyle='#0d1a29'; ctx.font='700 38px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,49);
+  const texture=new THREE.CanvasTexture(canvas); texture.colorSpace=THREE.SRGBColorSpace; texture.generateMipmaps=false; texture.minFilter=THREE.LinearFilter;
+  const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:true,depthWrite:false});
+  const sprite=new THREE.Sprite(material); sprite.scale.set(.58,.22,1); sprite.renderOrder=3; sprite.userData.positionCode=text;
+  return sprite;
+}
+
 function createPallet(rand,width,depth,loadHeight,fill){const g=new THREE.Group();const wood=mat(WOOD,.96),darkWood=mat('#654326',.98);const deckH=.07,palletH=.15;for(let i=-1;i<=1;i++)g.add(box(width*.94,deckH,depth*.16,wood,0,.11,i*depth*.31));for(let i=-1;i<=1;i++)g.add(box(width*.15,.09,depth*.88,darkWood,i*width*.33,.045,0));if(rand()>fill){g.userData.empty=true;return g;}const layers=Math.max(1,Math.floor(2+rand()*4));const cols=rand()<.6?3:2,rows=rand()<.55?2:1;const gap=.025,usableW=width*.88,usableD=depth*.86;const bw=(usableW-gap*(cols-1))/cols,bd=(usableD-gap*(rows-1))/rows;const bh=Math.max(.13,(loadHeight-palletH)/layers*.90);for(let l=0;l<layers;l++)for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){if(rand()<.08)continue;const material=mat(BOXES[Math.floor(rand()*BOXES.length)],.92);const px=-usableW/2+bw/2+c*(bw+gap),pz=-usableD/2+bd/2+r*(bd+gap);g.add(box(bw*.96,bh,bd*.96,material,px,palletH+bh/2+l*bh,pz));}g.userData.empty=false;return g;}
 
-function createRackRow(config,rowIndex){const g=new THREE.Group();const uprightMat=mat(BLUE,.62,.34),beamMat=mat(BEAM,.58,.30),footMat=mat(BLUE_DARK,.68,.28),braceMat=mat(STEEL,.65,.34);const{bays,levels,bayWidth,rackDepth,levelHeight,occupancy}=config;const totalW=bays*bayWidth,uprightH=levels*levelHeight+.48,post=.10;for(let b=0;b<=bays;b++){const x=-totalW/2+b*bayWidth;for(const z of[-rackDepth/2,rackDepth/2]){g.add(box(post,uprightH,post,uprightMat,x,uprightH/2,z));g.add(box(.26,.055,.26,footMat,x,.028,z));}if(b<bays){const nx=x+bayWidth;for(let l=0;l<levels;l++){const y=.34+(l+1)*levelHeight;for(const z of[-rackDepth/2,rackDepth/2])g.add(box(bayWidth-.08,.10,.09,beamMat,(x+nx)/2,y,z));}const braceY=uprightH*.48;for(const z of[-rackDepth/2,rackDepth/2]){const brace=new THREE.Mesh(new THREE.BoxGeometry(.035,uprightH*.80,.035),braceMat);brace.position.set(x+bayWidth*.02,braceY,z);brace.rotation.z=Math.PI*.16;g.add(brace);}}}let palletCount=0,occupied=0;const palletW=bayWidth*.42,palletD=rackDepth*.80;for(let b=0;b<bays;b++){const bx=-totalW/2+(b+.5)*bayWidth;for(let l=0;l<levels;l++){const shelfY=.39+l*levelHeight;for(const slot of[-1,1]){const seed=(config.seed+rowIndex*7919+b*3571+l*1171+(slot+2)*97)>>>0;const r=mulberry32(seed);const pallet=createPallet(r,palletW,palletD,levelHeight*.76,occupancy);pallet.position.set(bx+slot*bayWidth*.235,shelfY,0);g.add(pallet);palletCount++;if(!pallet.userData.empty)occupied++;}}}g.userData={palletCount,occupied};return g;}
+function createRackRow(config,rowIndex,positionStart=1){
+  const g=new THREE.Group();
+  const uprightMat=mat(BLUE,.62,.34),beamMat=mat(BEAM,.58,.30),footMat=mat(BLUE_DARK,.68,.28),braceMat=mat(STEEL,.65,.34);
+  const{bays,levels,bayWidth,rackDepth,levelHeight,occupancy}=config;
+  const totalW=bays*bayWidth,uprightH=levels*levelHeight+.48,post=.10;
+  for(let b=0;b<=bays;b++){
+    const x=-totalW/2+b*bayWidth;
+    for(const z of[-rackDepth/2,rackDepth/2]){g.add(box(post,uprightH,post,uprightMat,x,uprightH/2,z));g.add(box(.26,.055,.26,footMat,x,.028,z));}
+    if(b<bays){
+      const nx=x+bayWidth;
+      for(let l=0;l<levels;l++){const y=.34+(l+1)*levelHeight;for(const z of[-rackDepth/2,rackDepth/2])g.add(box(bayWidth-.08,.10,.09,beamMat,(x+nx)/2,y,z));}
+      const braceY=uprightH*.48;
+      for(const z of[-rackDepth/2,rackDepth/2]){const brace=new THREE.Mesh(new THREE.BoxGeometry(.035,uprightH*.80,.035),braceMat);brace.position.set(x+bayWidth*.02,braceY,z);brace.rotation.z=Math.PI*.16;g.add(brace);}
+    }
+  }
+
+  let palletCount=0,occupied=0,positionNumber=positionStart;
+  const palletW=bayWidth*.42,palletD=rackDepth*.80;
+  const positionCodes=[];
+  for(let b=0;b<bays;b++){
+    const bx=-totalW/2+(b+.5)*bayWidth;
+    for(let l=0;l<levels;l++){
+      const shelfY=.39+l*levelHeight;
+      for(const slot of[-1,1]){
+        const seed=(config.seed+rowIndex*7919+b*3571+l*1171+(slot+2)*97)>>>0;
+        const r=mulberry32(seed);
+        const pallet=createPallet(r,palletW,palletD,levelHeight*.76,occupancy);
+        const px=bx+slot*bayWidth*.235;
+        pallet.position.set(px,shelfY,0);
+        const code=`P${String(positionNumber).padStart(4,'0')}`;
+        pallet.userData.positionCode=code;
+        pallet.userData.address={rack:rowIndex+1,bay:b+1,level:l+1,slot:slot<0?1:2};
+        g.add(pallet);
+        const label=createPositionLabel(code,!pallet.userData.empty);
+        label.position.set(px,shelfY+.27,rackDepth/2+.08);
+        label.userData.address=pallet.userData.address;
+        g.add(label);
+        positionCodes.push(code);
+        palletCount++; if(!pallet.userData.empty)occupied++;
+        positionNumber++;
+      }
+    }
+  }
+  g.userData={palletCount,occupied,positionCodes,nextPositionNumber:positionNumber};
+  return g;
+}
 
 function addFloorMarkings(root,width,depth,rows){const floor=box(width,.08,depth,mat(FLOOR,.96),0,.02,0);root.add(floor);const lineMat=mat(SAFETY,.72),white=mat('#d9dde2',.74);const edgeX=width/2-.45;for(const x of[-edgeX,edgeX])root.add(box(.055,.012,depth*.92,lineMat,x,.071,0));const pitch=depth/Math.max(1,rows);for(let r=0;r<rows-1;r++){const z=-depth/2+(r+1)*pitch;root.add(box(width*.94,.012,.045,white,0,.072,z));}const dockZ=depth/2-.55;for(let i=0;i<6;i++)root.add(box(.10,.013,.75,lineMat,-1.5+i*.6,.073,dockZ));}
 
@@ -23,4 +84,43 @@ function createForklift(){const g=new THREE.Group();const yellow=mat('#d6a31c',.
 
 function getAisleCenters(rackCenters,rackDepth){const sorted=[...rackCenters].sort((a,b)=>a-b),centers=[];for(let i=0;i<sorted.length-1;i++){const clearGap=sorted[i+1]-sorted[i]-rackDepth;if(clearGap>rackDepth*.35)centers.push((sorted[i]+sorted[i+1])/2);}return centers;}
 
-export function generateWarehouse(c){const root=new THREE.Group();root.name='ProceduralWarehouse';const rand=mulberry32(c.seed??314159);const requestedRows=Math.max(1,Math.round(c.rows??5));const rows=Math.max(2,requestedRows),bays=Math.max(1,Math.round(c.bays??7)),levels=Math.max(1,Math.round(c.levels??4));const rackType=c.rackType==='double'?'double':'unitary';const bayWidth=c.bayWidth??1.55,rackDepth=c.rackDepth??1.08,levelHeight=c.levelHeight??1.05,aisleWidth=c.aisleWidth??2.45;const rowPitch=rackDepth+aisleWidth,doubleOffset=rackDepth*.98,width=bays*bayWidth+2.2,baseDepth=rows*rackDepth+(rows-1)*aisleWidth+3.0,depth=baseDepth+(rackType==='double'?rackDepth*2:0);addFloorMarkings(root,width,depth,rows);let palletPositions=0,occupiedPositions=0,physicalRackRows=0;const rackCenters=[];const addRack=(z,rowIndex,labelIndex)=>{const rack=createRackRow({...c,bays,levels,bayWidth,rackDepth,levelHeight,seed:c.seed??314159},rowIndex);rack.position.z=z;root.add(rack);rackCenters.push(z);physicalRackRows++;palletPositions+=rack.userData.palletCount;occupiedPositions+=rack.userData.occupied;const id=box(.52,.24,.025,mat('#e9eef4',.72),-width/2+.36,levels*levelHeight+.10,z-rackDepth/2-.03);id.userData.label=`R${String(labelIndex).padStart(2,'0')}`;root.add(id);};for(let r=0;r<rows;r++){const z=-(rows-1)*rowPitch/2+r*rowPitch;addRack(z,r*2+1,r+1);if(rackType==='double'){const direction=z<0?-1:z>0?1:(r<rows/2?-1:1);addRack(z+direction*doubleOffset,r*2+2,`${r+1}B`);}}const aisleCenters=getAisleCenters(rackCenters,rackDepth);const requestedForklifts=Math.max(0,Math.min(6,Math.round(c.forklifts??0)));const forkliftCount=c.showForklifts===false?0:requestedForklifts;for(let i=0;i<forkliftCount;i++){const f=createForklift();const aisleZ=aisleCenters.length?aisleCenters[i%aisleCenters.length]:0;const sameAisleIndex=Math.floor(i/Math.max(1,aisleCenters.length));const sameAisleCount=Math.ceil(forkliftCount/Math.max(1,aisleCenters.length));const usableLength=Math.max(1.2,width-2.2);const x=sameAisleCount===1?0:-usableLength*.30+(sameAisleIndex/Math.max(1,sameAisleCount-1))*usableLength*.60;f.position.set(x,0,aisleZ);f.rotation.y=Math.PI/2;root.add(f);}root.userData.stats={mode:'procedural-warehouse-v3',rackType,requestedRows,rows,physicalRackRows,bays,levels,rackModules:physicalRackRows*bays,palletPositions,occupiedPositions,occupancy:palletPositions?occupiedPositions/palletPositions:0,aisles:Math.max(1,aisleCenters.length),forklifts:forkliftCount,width,depth};return root;}
+export function generateWarehouse(c){
+  const root=new THREE.Group();root.name='ProceduralWarehouse';
+  const requestedRows=Math.max(1,Math.round(c.rows??5));
+  const rows=Math.max(2,requestedRows),bays=Math.max(1,Math.round(c.bays??7)),levels=Math.max(1,Math.round(c.levels??4));
+  const rackType=c.rackType==='double'?'double':'unitary';
+  const bayWidth=c.bayWidth??1.55,rackDepth=c.rackDepth??1.08,levelHeight=c.levelHeight??1.05,aisleWidth=c.aisleWidth??2.45;
+  const rowPitch=rackDepth+aisleWidth,doubleOffset=rackDepth*.98,width=bays*bayWidth+2.2,baseDepth=rows*rackDepth+(rows-1)*aisleWidth+3.0,depth=baseDepth+(rackType==='double'?rackDepth*2:0);
+  addFloorMarkings(root,width,depth,rows);
+  let palletPositions=0,occupiedPositions=0,physicalRackRows=0,nextPositionNumber=1;
+  const rackCenters=[];
+  const addRack=(z,rowIndex,labelIndex)=>{
+    const rack=createRackRow({...c,bays,levels,bayWidth,rackDepth,levelHeight,seed:c.seed??314159},rowIndex,nextPositionNumber);
+    nextPositionNumber=rack.userData.nextPositionNumber;
+    rack.position.z=z; root.add(rack); rackCenters.push(z); physicalRackRows++;
+    palletPositions+=rack.userData.palletCount; occupiedPositions+=rack.userData.occupied;
+    const id=box(.52,.24,.025,mat('#e9eef4',.72),-width/2+.36,levels*levelHeight+.10,z-rackDepth/2-.03); id.userData.label=`R${String(labelIndex).padStart(2,'0')}`; root.add(id);
+  };
+  for(let r=0;r<rows;r++){
+    const z=-(rows-1)*rowPitch/2+r*rowPitch;
+    addRack(z,r*2+1,r+1);
+    if(rackType==='double'){
+      const direction=z<0?-1:z>0?1:(r<rows/2?-1:1);
+      addRack(z+direction*doubleOffset,r*2+2,`${r+1}B`);
+    }
+  }
+  const aisleCenters=getAisleCenters(rackCenters,rackDepth);
+  const requestedForklifts=Math.max(0,Math.min(6,Math.round(c.forklifts??0)));
+  const forkliftCount=c.showForklifts===false?0:requestedForklifts;
+  for(let i=0;i<forkliftCount;i++){
+    const f=createForklift();
+    const aisleZ=aisleCenters.length?aisleCenters[i%aisleCenters.length]:0;
+    const sameAisleIndex=Math.floor(i/Math.max(1,aisleCenters.length));
+    const sameAisleCount=Math.ceil(forkliftCount/Math.max(1,aisleCenters.length));
+    const usableLength=Math.max(1.2,width-2.2);
+    const x=sameAisleCount===1?0:-usableLength*.30+(sameAisleIndex/Math.max(1,sameAisleCount-1))*usableLength*.60;
+    f.position.set(x,0,aisleZ); f.rotation.y=Math.PI/2; root.add(f);
+  }
+  root.userData.stats={mode:'procedural-warehouse-v4',rackType,requestedRows,rows,physicalRackRows,bays,levels,rackModules:physicalRackRows*bays,palletPositions,occupiedPositions,numberedPositions:palletPositions,occupancy:palletPositions?occupiedPositions/palletPositions:0,aisles:Math.max(1,aisleCenters.length),forklifts:forkliftCount,width,depth};
+  return root;
+}
