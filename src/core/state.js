@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 19,
+  version: 20,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
@@ -73,6 +73,24 @@ export const defaultState = {
     promoTables: 2,
     checkouts: 4
   },
+  castle: {
+    seed: 731942,
+    style: 'concentric',
+    towerStyle: 'round',
+    outerWidth: 13,
+    outerDepth: 11,
+    wallHeight: 2.6,
+    keepWidth: 4.6,
+    keepDepth: 4.2,
+    keepHeight: 4.8,
+    innerCourtyard: true,
+    moat: true,
+    bridgeWidth: 1.4,
+    garden: true,
+    forestDensity: .55,
+    village: true,
+    villageHouses: 12
+  },
   environment: { timeOfDay: 15.6, exposure: 1.18, ground: '#151a22', autoRotate: false, grid: true }
 };
 
@@ -98,6 +116,7 @@ export class Store extends EventTarget {
     if (target === 'city') this.set('city.seed', seed);
     else if (target === 'warehouse') this.set('warehouse.seed', seed);
     else if (target === 'supermarket') this.set('supermarket.seed', seed);
+    else if (target === 'castle') this.set('castle.seed', seed);
     else { this.set('seed', seed); this.set('human.seed', seed, true); }
     return seed;
   }
