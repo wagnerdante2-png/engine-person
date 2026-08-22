@@ -1,5 +1,5 @@
 export const defaultState = {
-  version: 14,
+  version: 15,
   mode: 'human',
   activeTool: 'shape',
   seed: 483921,
@@ -41,6 +41,19 @@ export const defaultState = {
     minFloors: 2, maxFloors: 14, variation: 0.72, greenRatio: 0.15, facadeHue: 0.58,
     organicLayout: .12, fortification: .55, towerChance: .28, marketRatio: .18, timberRatio: .46
   },
+  warehouse: {
+    seed: 314159,
+    rows: 5,
+    bays: 7,
+    levels: 4,
+    bayWidth: 1.55,
+    rackDepth: 1.08,
+    levelHeight: 1.05,
+    aisleWidth: 2.45,
+    occupancy: .82,
+    forklifts: 2,
+    showForklifts: true
+  },
   environment: { timeOfDay: 15.6, exposure: 1.18, ground: '#151a22', autoRotate: false, grid: true }
 };
 
@@ -64,6 +77,7 @@ export class Store extends EventTarget {
   randomizeSeed(target = 'seed') {
     const seed = Math.floor(Math.random() * 900000) + 100000;
     if (target === 'city') this.set('city.seed', seed);
+    else if (target === 'warehouse') this.set('warehouse.seed', seed);
     else { this.set('seed', seed); this.set('human.seed', seed, true); }
     return seed;
   }
