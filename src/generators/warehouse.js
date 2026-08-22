@@ -13,19 +13,60 @@ const BOXES=['#b98a58','#8f6a48','#c49a6c','#a9794f','#d1aa78','#7d644e'];
 
 function box(w,h,d,material,x,y,z){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;return mesh;}
 
+function roundedRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
+
 function createPositionLabel(text,occupied=true){
   const canvas=document.createElement('canvas');
-  canvas.width=256; canvas.height=96;
+  canvas.width=320; canvas.height=112;
   const ctx=canvas.getContext('2d');
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle=occupied?'rgba(238,244,250,.96)':'rgba(196,207,219,.90)';
-  ctx.fillRect(8,8,240,80);
-  ctx.strokeStyle='rgba(21,95,181,.95)'; ctx.lineWidth=6; ctx.strokeRect(8,8,240,80);
-  ctx.fillStyle='#0d1a29'; ctx.font='700 38px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text,128,49);
-  const texture=new THREE.CanvasTexture(canvas); texture.colorSpace=THREE.SRGBColorSpace; texture.generateMipmaps=false; texture.minFilter=THREE.LinearFilter;
-  const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:true,depthWrite:false});
-  const sprite=new THREE.Sprite(material); sprite.scale.set(.58,.22,1); sprite.renderOrder=3; sprite.userData.positionCode=text;
+
+  const glow=occupied?'rgba(90,229,255,.36)':'rgba(130,155,175,.20)';
+  const edge=occupied?'rgba(93,225,255,.82)':'rgba(124,151,171,.58)';
+  const textColor=occupied?'#c9f7ff':'#b8c7d4';
+
+  ctx.shadowColor=glow; ctx.shadowBlur=14;
+  roundedRect(ctx,10,10,300,92,14);
+  ctx.fillStyle='rgba(6,16,25,.94)'; ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.lineWidth=2; ctx.strokeStyle=edge; ctx.stroke();
+
+  ctx.fillStyle='rgba(255,255,255,.03)';
+  roundedRect(ctx,18,18,284,76,10); ctx.fill();
+
+  ctx.lineWidth=1.4; ctx.strokeStyle=occupied?'rgba(89,221,255,.34)':'rgba(135,160,179,.18)';
+  ctx.beginPath();
+  ctx.moveTo(26,76); ctx.lineTo(54,76); ctx.lineTo(71,57); ctx.lineTo(92,57);
+  ctx.moveTo(228,56); ctx.lineTo(247,56); ctx.lineTo(262,38); ctx.lineTo(292,38);
+  ctx.moveTo(228,77); ctx.lineTo(260,77); ctx.lineTo(275,63); ctx.lineTo(294,63);
+  ctx.stroke();
+
+  const nodes=[[54,76],[71,57],[247,56],[262,38],[260,77],[275,63]];
+  ctx.fillStyle=occupied?'rgba(112,235,255,.88)':'rgba(150,171,188,.45)';
+  for(const [x,y] of nodes){ctx.beginPath();ctx.arc(x,y,2.7,0,Math.PI*2);ctx.fill();}
+
+  ctx.font='600 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.fillStyle=occupied?'rgba(117,231,250,.66)':'rgba(158,177,191,.50)';
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText('NODE',26,34);
+  ctx.textAlign='right'; ctx.fillText(occupied?'LIVE':'IDLE',294,88);
+
+  ctx.shadowColor=occupied?'rgba(87,231,255,.55)':'transparent'; ctx.shadowBlur=8;
+  ctx.fillStyle=textColor;
+  ctx.font='700 42px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(text,160,58);
+  ctx.shadowBlur=0;
+
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.colorSpace=THREE.SRGBColorSpace; texture.generateMipmaps=false; texture.minFilter=THREE.LinearFilter;
+  const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:true,depthWrite:false,opacity:.92});
+  const sprite=new THREE.Sprite(material);
+  sprite.scale.set(.66,.235,1); sprite.renderOrder=4;
+  sprite.userData.positionCode=text;
+  sprite.userData.baseOpacity=occupied?.92:.78;
+  sprite.userData.phase=(parseInt(text.replace(/\D/g,''),10)||0)*.37;
+  sprite.userData.isPositionLabel=true;
   return sprite;
 }
 
@@ -64,10 +105,12 @@ function createRackRow(config,rowIndex,positionStart=1){
         pallet.userData.positionCode=code;
         pallet.userData.address={rack:rowIndex+1,bay:b+1,level:l+1,slot:slot<0?1:2};
         g.add(pallet);
-        const label=createPositionLabel(code,!pallet.userData.empty);
-        label.position.set(px,shelfY+.27,rackDepth/2+.08);
-        label.userData.address=pallet.userData.address;
-        g.add(label);
+        if(config.showPositionLabels!==false){
+          const label=createPositionLabel(code,!pallet.userData.empty);
+          label.position.set(px,shelfY+.28,rackDepth/2+.085);
+          label.userData.address=pallet.userData.address;
+          g.add(label);
+        }
         positionCodes.push(code);
         palletCount++; if(!pallet.userData.empty)occupied++;
         positionNumber++;
@@ -121,6 +164,17 @@ export function generateWarehouse(c){
     const x=sameAisleCount===1?0:-usableLength*.30+(sameAisleIndex/Math.max(1,sameAisleCount-1))*usableLength*.60;
     f.position.set(x,0,aisleZ); f.rotation.y=Math.PI/2; root.add(f);
   }
-  root.userData.stats={mode:'procedural-warehouse-v4',rackType,requestedRows,rows,physicalRackRows,bays,levels,rackModules:physicalRackRows*bays,palletPositions,occupiedPositions,numberedPositions:palletPositions,occupancy:palletPositions?occupiedPositions/palletPositions:0,aisles:Math.max(1,aisleCenters.length),forklifts:forkliftCount,width,depth};
+
+  const animatedLabels=[];
+  if(c.showPositionLabels!==false){
+    root.traverse(obj=>{if(obj.userData?.isPositionLabel)animatedLabels.push(obj);});
+  }
+  root.userData.update=(elapsed)=>{
+    for(const label of animatedLabels){
+      const base=label.userData.baseOpacity??.88;
+      label.material.opacity=THREE.MathUtils.clamp(base+Math.sin(elapsed*1.35+(label.userData.phase??0))*.035,.62,.98);
+    }
+  };
+  root.userData.stats={mode:'procedural-warehouse-v5',rackType,requestedRows,rows,physicalRackRows,bays,levels,rackModules:physicalRackRows*bays,palletPositions,occupiedPositions,numberedPositions:palletPositions,positionLabelsVisible:c.showPositionLabels!==false,occupancy:palletPositions?occupiedPositions/palletPositions:0,aisles:Math.max(1,aisleCenters.length),forklifts:forkliftCount,width,depth};
   return root;
 }
